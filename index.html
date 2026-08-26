@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1d6f8f">
+<title>UK Canal Navigator V3.3</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--ink:#182027;--muted:#67737d;--line:#d9dee3;--brand:#1d6f8f;--bg:#f4f5f6;--card:#fff}
+html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+*{box-sizing:border-box}#app{height:100%;display:flex;flex-direction:column}
+header{background:#fff;border-bottom:1px solid var(--line);padding:10px 12px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+h1{font-size:18px;margin:0}.sub,.meta{font-size:12px;color:var(--muted)}.status{font-size:12px;padding:5px 9px;border-radius:999px;background:#fff6d8;border:1px solid #e6cf76}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 360px;min-height:0;flex:1}#map{height:100%;min-height:0}
+aside{background:#fff;border-left:1px solid var(--line);overflow:auto;padding:12px}.section{border-bottom:1px solid #e3e7ea;padding-bottom:14px;margin-bottom:14px}.section:last-child{border-bottom:none}
+.legend{display:flex;flex-wrap:wrap;gap:6px;font-size:12px}.pill{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:5px 8px}.dot{width:9px;height:9px;border-radius:50%}
+.btn{padding:10px 12px;border:1px solid var(--brand);border-radius:9px;background:var(--brand);color:#fff;cursor:pointer;width:100%;margin-top:8px;min-height:46px}.btn.secondary{background:#fff;color:var(--brand)}
+.card{border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0;background:#fafbfc}.card h3{margin:0 0 5px;font-size:14px}
+.warn{background:#fff8e5;border:1px solid #eedc9a;border-radius:9px;padding:9px;font-size:12px}.ok{background:#edf8f0;border:1px solid #acd0b4;border-radius:9px;padding:9px;font-size:12px}.bad{background:#fdecec;border:1px solid #e0aaaa;border-radius:9px;padding:9px;font-size:12px}
+.notice{border-left:5px solid #7f858b}.notice.restricted{border-left-color:#d2a72c}.notice.closed{border-left-color:#c94a4a}.notice.planned{border-left-color:#8352b9}
+.control-list{display:grid;gap:6px;margin-top:8px}
+.control-row{display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;align-items:center;border:1px solid #e1e5e8;border-radius:10px;padding:9px 10px;background:#fafbfc;min-height:46px}
+.control-row input[type=checkbox]{appearance:none;width:22px;height:22px;border:2px solid #87949d;border-radius:5px;margin:0;display:grid;place-content:center;background:white}
+.control-row input[type=checkbox]::before{content:"";width:11px;height:6px;border-left:3px solid white;border-bottom:3px solid white;transform:rotate(-45deg) scale(0);margin-top:-2px;transition:transform .08s ease}
+.control-row input[type=checkbox]:checked{background:var(--brand);border-color:var(--brand)}
+.control-row input[type=checkbox]:checked::before{transform:rotate(-45deg) scale(1)}
+.control-row span{font-size:14px;line-height:1.25}
+select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border-radius:8px;background:#fff;font:inherit}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.field{display:grid;gap:4px;font-size:13px;margin-top:8px}.poi-count{font-weight:700}.small{font-size:11px;color:var(--muted)}
+#detailPanel{display:none}#detailPanel.active{display:block}#defaultPanel.hidden{display:none}.detail-back{border:0;background:none;color:var(--brand);padding:0;cursor:pointer;font:inherit}
+.gps-pulse{width:18px;height:18px;border-radius:50%;background:#1976d2;border:4px solid white;box-shadow:0 0 0 2px #1976d2,0 1px 5px rgba(0,0,0,.35)}
+.map-msg{position:absolute;z-index:900;left:50%;top:10px;transform:translateX(-50%);background:rgba(255,255,255,.95);border:1px solid #d6dde1;border-radius:9px;padding:7px 10px;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.15);pointer-events:none;max-width:82%;text-align:center}
+.env-banner{display:none;margin-bottom:10px}.env-banner.show{display:block}
+@media(max-width:800px){.main{grid-template-columns:1fr;grid-template-rows:minmax(480px,58vh) auto}aside{border-left:none;border-top:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+ <div><h1>UK Canal Navigator V3.3</h1><div class="sub">CRT GIS • live GPS • canal-side POIs • mobile-first controls</div></div>
+ <div class="status" id="loadStatus">Loading CRT GIS…</div>
+</header>
+
+<div class="main">
+<div style="position:relative;min-height:0">
+ <div id="map"></div><div class="map-msg" id="mapMsg">Zoom into a canal area; POIs load automatically from zoom 13.</div>
+</div>
+<aside>
+<div id="detailPanel"></div>
+<div id="defaultPanel">
+
+<div id="envBanner" class="env-banner bad"></div>
+
+<div class="section">
+ <strong>My live location</strong>
+ <button class="btn" id="locateBtn">Start live GPS</button>
+ <div class="control-list">
+  <label class="control-row"><input type="checkbox" id="followGps" checked><span>Keep map centred on my position</span></label>
+ </div>
+ <div id="gpsStatus" class="card meta">GPS not started.</div>
+</div>
+
+<div class="section">
+ <strong>Nearby canal information</strong>
+ <div class="meta">Automatically loaded around the map centre. Tap any marker for details.</div>
+ <div class="control-list">
+  <label class="control-row"><input id="locksToggle" type="checkbox" checked><span>Locks</span></label>
+  <label class="control-row"><input id="marinaToggle" type="checkbox" checked><span>Marinas & boatyards</span></label>
+  <label class="control-row"><input id="servicesToggle" type="checkbox" checked><span>Water, waste, pump-out & fuel</span></label>
+  <label class="control-row"><input id="pubToggle" type="checkbox" checked><span>Pubs, restaurants & cafés</span></label>
+  <label class="control-row"><input id="laundryToggle" type="checkbox" checked><span>Laundrettes</span></label>
+  <label class="control-row"><input id="shopsToggle" type="checkbox" checked><span>Shops & supermarkets</span></label>
+  <label class="control-row"><input id="attractionsToggle" type="checkbox"><span>Visitor attractions</span></label>
+ </div>
+ <div class="card"><div>Loaded nearby: <span id="poiCount" class="poi-count">0</span></div><div id="poiStatus" class="small">Waiting for a local zoom level.</div></div>
+ <button class="btn secondary" id="loadPoisBtn">Refresh nearby POIs</button>
+</div>
+
+<div class="section">
+ <strong>Jump to test location</strong>
+ <label class="field">Location<select id="testArea">
+  <option value="52.289,-1.204,14">Braunston</option>
+  <option value="52.486,-1.890,14">Birmingham</option>
+  <option value="53.258,-2.127,14">Macclesfield</option>
+  <option value="53.800,-1.549,14">Leeds</option>
+  <option value="52.902,-2.147,14">Stone</option>
+ </select></label>
+ <button class="btn secondary" id="jumpBtn">Go there</button>
+</div>
+
+<div class="section">
+ <strong>Navigation status</strong>
+ <div class="legend" style="margin-top:8px">
+  <span class="pill"><span class="dot" style="background:#1d6f8f"></span>No matched notice</span>
+  <span class="pill"><span class="dot" style="background:#d2a72c"></span>Restriction</span>
+  <span class="pill"><span class="dot" style="background:#c94a4a"></span>Closure</span>
+  <span class="pill"><span class="dot" style="background:#8352b9"></span>Planned</span>
+ </div>
+ <div class="warn" style="margin-top:8px">Status is still matched at waterway level. Exact affected stretches are the next status-data refinement.</div>
+ <div id="notices"></div>
+</div>
+</div>
+</aside>
+</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const isWebOrigin=location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1';
+const env=document.getElementById('envBanner');
+if(!isWebOrigin){
+ env.classList.add('show');
+ env.innerHTML='<strong>Limited preview mode</strong><br>This page is being opened as <code>'+location.protocol+'</code>. The CRT map can still load, but Android may block GPS permission and cross-origin POI calls. For the full app, deploy this folder to HTTPS.';
+}
+
+const map=L.map('map').setView([52.6,-1.6],7);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+
+const rules=[
+ {match:'ashton',status:'closed'},{match:'caldon',status:'closed'},
+ {match:'oxford',status:'restricted'},{match:'macclesfield',status:'restricted'},
+ {match:'grand union',status:'planned'}
+];
+const styles={
+ base:{color:'#1d6f8f',weight:4,opacity:.92},
+ restricted:{color:'#d2a72c',weight:6,opacity:.95},
+ closed:{color:'#c94a4a',weight:7,opacity:.97},
+ planned:{color:'#8352b9',weight:6,opacity:.95,dashArray:'9 6'}
+};
+function matched(name=''){const n=name.toLowerCase();return rules.find(r=>n.includes(r.match))}
+const canals=L.geoJSON(null,{
+ style:f=>styles[matched(f.properties?.name||f.properties?.NAME||'')?.status||'base'],
+ onEachFeature:(f,l)=>{
+  const name=f.properties?.name||f.properties?.NAME||'CRT waterway',m=matched(name);
+  l.bindTooltip(name+(m?' • '+m.status:''),{sticky:true});
+  l.on('click',()=>showDetail(name,'CRT waterway',
+   m?'A current status snapshot is matched to this waterway. Exact affected-section mapping is not yet applied.'
+    :'No current snapshot notice is matched. This does not guarantee unrestricted passage.'));
+ }
+}).addTo(map);
+const CRT='https://services.arcgis.com/DknzyjEEie5tEW0u/arcgis/rest/services/Canal_And_River_Trust_Canals_By_Navigation_View/FeatureServer/1/query?where=1%3D1&outFields=*&outSR=4326&f=geojson';
+fetch(CRT).then(r=>{if(!r.ok)throw Error(r.status);return r.json()}).then(g=>{
+ canals.addData(g);document.getElementById('loadStatus').textContent='CRT GIS loaded • '+g.features.length+' features';
+ document.getElementById('loadStatus').style.background='#e9f6ed';
+ if(canals.getBounds().isValid())map.fitBounds(canals.getBounds(),{padding:[12,12]});
+}).catch(e=>document.getElementById('loadStatus').textContent='CRT GIS failed: '+e.message);
+
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+function showDetail(name,type,html){
+ const d=document.getElementById('detailPanel'),main=document.getElementById('defaultPanel');
+ d.innerHTML='<button class="detail-back" id="backDetail">← Back to exact map position</button><h2 style="font-size:18px;margin:12px 0 4px">'+esc(name)+'</h2><div class="meta">'+esc(type)+'</div><div class="card">'+html+'</div>';
+ d.classList.add('active');main.classList.add('hidden');
+ document.getElementById('backDetail').onclick=()=>{d.classList.remove('active');main.classList.remove('hidden')};
+}
+
+/* GPS */
+let watch=null,gpsMarker=null,accuracy=null,first=true;
+const gpsIcon=L.divIcon({className:'',html:'<div class="gps-pulse"></div>',iconSize:[18,18],iconAnchor:[9,9]});
+document.getElementById('locateBtn').onclick=()=>{
+ const s=document.getElementById('gpsStatus');
+ if(!isWebOrigin){s.className='bad';s.innerHTML='<strong>GPS unavailable in this preview.</strong><br>Open the app from an HTTPS address rather than Android Files/content://.';return}
+ if(!navigator.geolocation){s.className='bad';s.textContent='Geolocation API unavailable.';return}
+ if(watch!==null){navigator.geolocation.clearWatch(watch);watch=null;s.className='card meta';s.textContent='GPS stopped.';document.getElementById('locateBtn').textContent='Start live GPS';return}
+ s.className='card meta';s.textContent='Waiting for phone location permission…';
+ watch=navigator.geolocation.watchPosition(p=>{
+  const ll=[p.coords.latitude,p.coords.longitude];
+  if(!gpsMarker)gpsMarker=L.marker(ll,{icon:gpsIcon,zIndexOffset:1000}).addTo(map).bindPopup('Your live position');
+  else gpsMarker.setLatLng(ll);
+  if(!accuracy)accuracy=L.circle(ll,{radius:p.coords.accuracy,color:'#1976d2',weight:1,fillOpacity:.08}).addTo(map);
+  else accuracy.setLatLng(ll).setRadius(p.coords.accuracy);
+  s.className='ok';s.innerHTML='<strong>GPS active</strong><br>Accuracy ≈ '+Math.round(p.coords.accuracy)+' m';
+  document.getElementById('locateBtn').textContent='Stop live GPS';
+  if(first||document.getElementById('followGps').checked){map.setView(ll,Math.max(map.getZoom(),15));first=false}
+ },e=>{s.className='bad';s.textContent='GPS error '+e.code+': '+e.message},{enableHighAccuracy:true,maximumAge:3000,timeout:20000});
+};
+
+/* POIs */
+const poiLayer=L.layerGroup().addTo(map);
+let poiBusy=false,lastKey='',timer=null;
+const eps=['https://overpass.kumi.systems/api/interpreter','https://overpass-api.de/api/interpreter'];
+function on(id){return document.getElementById(id).checked}
+function radius(){const z=map.getZoom();return z>=16?1500:z>=14?2500:4000}
+function query(){
+ const c=map.getCenter(),r=radius(),a='(around:'+r+','+c.lat.toFixed(6)+','+c.lng.toFixed(6)+')',q=[];
+ if(on('locksToggle'))q.push('nwr[waterway=lock_gate]'+a+';','nwr[waterway=lock]'+a+';');
+ if(on('marinaToggle'))q.push('nwr[leisure=marina]'+a+';','nwr[waterway=boatyard]'+a+';');
+ if(on('servicesToggle'))q.push('nwr[amenity=drinking_water]'+a+';','nwr[amenity=waste_disposal]'+a+';','nwr[sanitary_dump_station=yes]'+a+';','nwr[fuel=yes]'+a+';');
+ if(on('pubToggle'))q.push('nwr[amenity~"pub|restaurant|cafe"]'+a+';');
+ if(on('laundryToggle'))q.push('nwr[shop=laundry]'+a+';','nwr[amenity=laundry]'+a+';');
+ if(on('shopsToggle'))q.push('nwr[shop~"convenience|supermarket"]'+a+';');
+ if(on('attractionsToggle'))q.push('nwr[tourism~"attraction|museum|viewpoint"]'+a+';');
+ return '[out:json][timeout:20];('+q.join('')+');out center tags;';
+}
+async function callOverpass(q){
+ let errs=[];
+ for(const ep of eps){
+  try{
+   let r=await fetch(ep+'?data='+encodeURIComponent(q),{method:'GET'});
+   if(!r.ok)throw Error('GET '+r.status);
+   return await r.json();
+  }catch(e){errs.push(e.message)}
+ }
+ throw Error(errs.join(' / '));
+}
+function classify(t){
+ if(t.waterway==='lock'||t.waterway==='lock_gate')return ['#333','Lock'];
+ if(t.leisure==='marina'||t.waterway==='boatyard')return ['#087d9d','Marina / boatyard'];
+ if(t.shop==='laundry'||t.amenity==='laundry')return ['#8a5db0','Laundry'];
+ if(['pub','restaurant','cafe'].includes(t.amenity))return ['#b76b2b',t.amenity];
+ if(['convenience','supermarket'].includes(t.shop))return ['#5f8a45',t.shop];
+ if(t.tourism)return ['#9b6a35',t.tourism];
+ return ['#3a8093','Boating service'];
+}
+function detail(t){
+ const a=[];
+ if(t['addr:street'])a.push(esc([t['addr:housenumber'],t['addr:street']].filter(Boolean).join(' ')));
+ if(t.opening_hours)a.push('Opening hours: '+esc(t.opening_hours));
+ if(t.cuisine)a.push('Cuisine: '+esc(t.cuisine.replaceAll(';',', ')));
+ if(t.phone)a.push('Phone: '+esc(t.phone));
+ if(t.website)a.push('Website listed');
+ return a.length?a.join('<br>'):'OpenStreetMap point of interest.';
+}
+async function loadPois(force=false){
+ if(map.getZoom()<13){document.getElementById('poiStatus').textContent='Zoom to level 13+ to load local POIs.';return}
+ if(!isWebOrigin){document.getElementById('poiStatus').textContent='POIs may be blocked while opened through Android Files/content://. Deploy to HTTPS for full access.';return}
+ const c=map.getCenter(),key=map.getZoom()+':'+c.lat.toFixed(3)+':'+c.lng.toFixed(3);
+ if(!force&&key===lastKey||poiBusy)return;
+ poiBusy=true;document.getElementById('poiStatus').textContent='Loading nearby information…';document.getElementById('mapMsg').textContent='Loading nearby pubs and services…';
+ try{
+  const j=await callOverpass(query());poiLayer.clearLayers();let n=0;
+  j.elements.forEach(e=>{
+   const lat=e.lat??e.center?.lat,lon=e.lon??e.center?.lon;if(lat==null||lon==null)return;
+   const t=e.tags||{},[color,type]=classify(t),name=t.name||type;
+   L.circleMarker([lat,lon],{radius:7,color:'#fff',weight:2,fillColor:color,fillOpacity:1})
+    .bindTooltip(name,{sticky:true}).on('click',()=>showDetail(name,type,detail(t))).addTo(poiLayer);n++;
+  });
+  document.getElementById('poiCount').textContent=n;document.getElementById('poiStatus').textContent=n+' POIs loaded within ~'+(radius()/1000).toFixed(1)+' km.';
+  document.getElementById('mapMsg').textContent=n?n+' nearby POIs loaded. Tap a marker for details.':'No selected POIs mapped nearby.';
+  lastKey=key;
+ }catch(e){document.getElementById('poiStatus').textContent='POI request failed: '+e.message;document.getElementById('mapMsg').textContent='POI feed failed; retry after moving/zooming.'}
+ finally{poiBusy=false}
+}
+function schedule(){clearTimeout(timer);timer=setTimeout(()=>loadPois(false),800)}
+map.on('moveend zoomend',schedule);
+document.getElementById('loadPoisBtn').onclick=()=>loadPois(true);
+['locksToggle','marinaToggle','servicesToggle','pubToggle','laundryToggle','shopsToggle','attractionsToggle'].forEach(id=>document.getElementById(id).onchange=()=>loadPois(true));
+document.getElementById('jumpBtn').onclick=()=>{const [a,b,z]=document.getElementById('testArea').value.split(',').map(Number);map.setView([a,b],z);setTimeout(()=>loadPois(true),600)};
+
+/* notice cards */
+const notices=[
+ ['Ashton Canal','closed','Active closure'],['Caldon Canal','closed','Active closure'],
+ ['Oxford Canal','restricted','Restricted operation'],['Macclesfield Canal','restricted','Restricted operation'],
+ ['Grand Union Canal','planned','Planned issue']
+];
+const box=document.getElementById('notices');
+notices.forEach(([w,s,t])=>{const d=document.createElement('div');d.className='card notice '+s;d.innerHTML='<h3>'+w+'</h3><div>'+t+'</div>';box.appendChild(d)});
+if('serviceWorker' in navigator && isWebOrigin) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script>
+</body>
+</html>
