@@ -1,21 +1,13 @@
-UK Canal Navigator V4.1
+UK Canal Navigator V4.2
 
-- Replaces generic coloured POI dots with recognisable emoji map markers.
-- Key updated to match map symbols.
-- Added toilets and showers to boating-services queries.
-- Symbols include:
-  ⚓ marina / boatyard
-  🚽 toilets
-  🚿 showers
-  💩 pump-out / Elsan
-  🗑️ refuse / waste
-  💧 drinking water
-  ⛽ fuel
-  🍺 pub
-  🍽️ restaurant
-  ☕ cafe
-  🧺 laundrette
-  🛒 shop / supermarket
-  🎡 attraction
-- Lock markers retain black / yellow ? / red X status behaviour.
-- V4.0 lock deduplication retained.
+POI reliability fix:
+- Food, shops, laundry and attractions are no longer bundled into one large amenity query.
+- Each category is requested and rendered independently.
+- A pub query failure cannot remove shops, locks or marinas.
+- Existing cached category markers are used if a refresh fails.
+- Food and shops now load from zoom 10.
+- Laundry loads from zoom 11.
+- Attractions load from zoom 12 when enabled.
+- Navigation-critical POIs still load first.
+- V4.1 emoji markers and V4.0 lock deduplication/status behaviour are retained.
+- Diagnostics now test/render each amenity category separately.
