@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1d6f8f">
-<title>UK Canal Navigator V3.4</title>
+<title>UK Canal Navigator V3.5</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
@@ -31,6 +31,8 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 .field{display:grid;gap:4px;font-size:13px;margin-top:8px}.poi-count{font-weight:700}.small{font-size:11px;color:var(--muted)}
 #detailPanel{display:none}#detailPanel.active{display:block}#defaultPanel.hidden{display:none}.detail-back{border:0;background:none;color:var(--brand);padding:0;cursor:pointer;font:inherit}
 .gps-pulse{width:18px;height:18px;border-radius:50%;background:#1976d2;border:4px solid white;box-shadow:0 0 0 2px #1976d2,0 1px 5px rgba(0,0,0,.35)}
+.lock-icon{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:16px;line-height:1;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.38)}
+.lock-normal{background:#111;color:#fff}.lock-closed{background:#d7263d;color:#fff}.lock-restricted{background:#f2b705;color:#111}
 .map-msg{position:absolute;z-index:900;left:50%;top:10px;transform:translateX(-50%);background:rgba(255,255,255,.95);border:1px solid #d6dde1;border-radius:9px;padding:7px 10px;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.15);pointer-events:none;max-width:82%;text-align:center}
 .env-banner{display:none;margin-bottom:10px}.env-banner.show{display:block}
 @media(max-width:800px){.main{grid-template-columns:1fr;grid-template-rows:minmax(480px,58vh) auto}aside{border-left:none;border-top:1px solid var(--line)}}
@@ -39,13 +41,13 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 <body>
 <div id="app">
 <header>
- <div><h1>UK Canal Navigator V3.4</h1><div class="sub">CRT GIS • live GPS • rich POIs • route planning • marine services</div></div>
+ <div><h1>UK Canal Navigator V3.5</h1><div class="sub">CRT GIS • faster GPS • live multi-scale POIs • lock status symbols • route planning</div></div>
  <div class="status" id="loadStatus">Loading CRT GIS…</div>
 </header>
 
 <div class="main">
 <div style="position:relative;min-height:0">
- <div id="map"></div><div class="map-msg" id="mapMsg">Zoom into a canal area; POIs load automatically from zoom 13.</div>
+ <div id="map"></div><div class="map-msg" id="mapMsg">POIs live-load from regional zoom; search radius tightens automatically as you zoom in.</div>
 </div>
 <aside>
 <div id="detailPanel"></div>
@@ -56,7 +58,9 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 <div class="section">
  <strong>POI map key</strong>
  <div class="poi-key">
-  <span><i style="background:#111111"></i>Locks</span>
+  <span><i style="background:#111111"></i>Lock</span>
+  <span><i style="background:#d7263d"></i>❌ Closed lock</span>
+  <span><i style="background:#f2b705"></i>❓ Restricted lock</span>
   <span><i style="background:#0077b6"></i>Marinas / boatyards</span>
   <span><i style="background:#00a6a6"></i>Water / waste / fuel</span>
   <span><i style="background:#e85d04"></i>Pubs / food</span>
@@ -89,7 +93,7 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
  <strong>Nearby canal information</strong>
  <div class="meta">Automatically loaded around the map centre. Tap any marker for details.</div>
  <div class="control-list">
-  <label class="control-row"><input type="checkbox" checked disabled><span><b>Locks</b> — always displayed in black</span></label>
+  <label class="control-row"><input type="checkbox" checked disabled><span><b>Locks</b> — permanent map layer; black normally, ❌ red when closed, ❓ yellow when restricted</span></label>
   <label class="control-row"><input id="marinaToggle" type="checkbox" checked><span>Marinas & boatyards</span></label>
   <label class="control-row"><input id="servicesToggle" type="checkbox" checked><span>Water, waste, pump-out & fuel</span></label>
   <label class="control-row"><input id="pubToggle" type="checkbox" checked><span>Pubs, restaurants & cafés</span></label>
@@ -228,7 +232,7 @@ document.getElementById('locateBtn').onclick=()=>{
  if(!navigator.geolocation){s.className='bad';s.textContent='Geolocation API unavailable.';return}
  if(watch!==null){navigator.geolocation.clearWatch(watch);watch=null;s.className='card meta';s.textContent='GPS stopped.';document.getElementById('locateBtn').textContent='Start live GPS';return}
  s.className='card meta';s.textContent='Waiting for phone location permission…';
- watch=navigator.geolocation.watchPosition(p=>{
+ const handleFix=p=>{
   const ll=[p.coords.latitude,p.coords.longitude];
   if(!gpsMarker)gpsMarker=L.marker(ll,{icon:gpsIcon,zIndexOffset:1000}).addTo(map).bindPopup('Your live position');
   else gpsMarker.setLatLng(ll);
@@ -237,7 +241,10 @@ document.getElementById('locateBtn').onclick=()=>{
   s.className='ok';s.innerHTML='<strong>GPS active</strong><br>Accuracy ≈ '+Math.round(p.coords.accuracy)+' m';
   document.getElementById('locateBtn').textContent='Stop live GPS';
   if(first||document.getElementById('followGps').checked){map.setView(ll,Math.max(map.getZoom(),15));first=false}
- },e=>{s.className='bad';s.textContent='GPS error '+e.code+': '+e.message},{enableHighAccuracy:true,maximumAge:3000,timeout:20000});
+ };
+ const handleErr=e=>{s.className='bad';s.textContent='GPS error '+e.code+': '+e.message};
+ navigator.geolocation.getCurrentPosition(handleFix,handleErr,{enableHighAccuracy:true,maximumAge:0,timeout:7000});
+ watch=navigator.geolocation.watchPosition(handleFix,handleErr,{enableHighAccuracy:true,maximumAge:1000,timeout:8000});
 };
 
 /* POIs */
@@ -245,10 +252,20 @@ const poiLayer=L.layerGroup().addTo(map);
 let poiBusy=false,lastKey='',timer=null;
 const eps=['https://overpass.kumi.systems/api/interpreter','https://overpass-api.de/api/interpreter'];
 function on(id){return document.getElementById(id).checked}
-function radius(){const z=map.getZoom();return z>=16?1500:z>=14?2500:4000}
+function radius(){
+ const z=map.getZoom();
+ if(z<=9)return 12000;
+ if(z===10)return 9500;
+ if(z===11)return 7500;
+ if(z===12)return 6000;
+ if(z===13)return 4500;
+ if(z===14)return 3200;
+ if(z===15)return 2400;
+ return 1600;
+}
 function query(){
  const c=map.getCenter(),r=radius(),a='(around:'+r+','+c.lat.toFixed(6)+','+c.lng.toFixed(6)+')',q=[];
- if(on('locksToggle'))q.push('nwr[waterway=lock_gate]'+a+';','nwr[waterway=lock]'+a+';');
+ q.push('nwr[waterway=lock_gate]'+a+';','nwr[waterway=lock]'+a+';');
  if(on('marinaToggle'))q.push('nwr[leisure=marina]'+a+';','nwr[waterway=boatyard]'+a+';');
  if(on('servicesToggle'))q.push('nwr[amenity=drinking_water]'+a+';','nwr[amenity=waste_disposal]'+a+';','nwr[sanitary_dump_station=yes]'+a+';','nwr[fuel=yes]'+a+';');
  if(on('pubToggle'))q.push('nwr[amenity~"pub|restaurant|cafe"]'+a+';');
@@ -286,31 +303,68 @@ function detail(t){
  if(t.website)a.push('Website listed');
  return a.length?a.join('<br>'):'OpenStreetMap point of interest.';
 }
-async function loadPois(force=false){
- if(map.getZoom()<13){document.getElementById('poiStatus').textContent='Zoom to level 13+ to load local POIs.';return}
- if(!isWebOrigin){document.getElementById('poiStatus').textContent='POIs may be blocked while opened through Android Files/content://. Deploy to HTTPS for full access.';return}
- const c=map.getCenter(),key=map.getZoom()+':'+c.lat.toFixed(3)+':'+c.lng.toFixed(3);
- if(!force&&key===lastKey||poiBusy)return;
- poiBusy=true;document.getElementById('poiStatus').textContent='Loading nearby information…';document.getElementById('mapMsg').textContent='Loading nearby pubs and services…';
- try{
-  const j=await callOverpass(query());poiLayer.clearLayers();let n=0;
-  j.elements.forEach(e=>{
+const poiCache=new Map();
+let poiRequestSeq=0;
+function cacheKey(){
+ const c=map.getCenter(),z=map.getZoom(),bucket=z<=10?1:z<=12?2:3;
+ const precision=bucket===1?1:bucket===2?2:3;
+ return z+':'+c.lat.toFixed(precision)+':'+c.lng.toFixed(precision)+':'+
+  ['marinaToggle','servicesToggle','pubToggle','laundryToggle','shopsToggle','attractionsToggle'].map(id=>on(id)?'1':'0').join('');
+}
+function renderPoiData(j){
+ poiLayer.clearLayers();let n=0;
+ j.elements.forEach(e=>{
    const lat=e.lat??e.center?.lat,lon=e.lon??e.center?.lon;if(lat==null||lon==null)return;
    const t=e.tags||{},[color,type]=classify(t),name=t.name||type;
-   L.circleMarker([lat,lon],{radius:7,color:'#fff',weight:2,fillColor:color,fillOpacity:1})
-    .bindTooltip(name,{sticky:true}).on('click',()=>showDetail(name,type,detail(t))).addTo(poiLayer);n++;
-  });
-  document.getElementById('poiCount').textContent=n;document.getElementById('poiStatus').textContent=n+' POIs loaded within ~'+(radius()/1000).toFixed(1)+' km.';
-  document.getElementById('mapMsg').textContent=n?n+' nearby POIs loaded. Tap a marker for details.':'No selected POIs mapped nearby.';
-  lastKey=key;
- }catch(e){document.getElementById('poiStatus').textContent='POI request failed: '+e.message;document.getElementById('mapMsg').textContent='POI feed failed; retry after moving/zooming.'}
- finally{poiBusy=false}
+   if(type==='Lock'){
+     const lockState=lockStatus(t,name);
+     const html=lockState==='closed'?'✕':lockState==='restricted'?'?':'';
+     const cls=lockState==='closed'?'lock-closed':lockState==='restricted'?'lock-restricted':'lock-normal';
+     const icon=L.divIcon({className:'',html:'<div class="lock-icon '+cls+'">'+html+'</div>',iconSize:[22,22],iconAnchor:[11,11]});
+     L.marker([lat,lon],{icon,zIndexOffset:700}).bindTooltip(name+(lockState!=='normal'?' • '+lockState:''),{sticky:true})
+       .on('click',()=>showDetail(name,'Lock',describe(t,lat,lon,name)+(lockState!=='normal'?'<div class="warn" style="margin-top:8px"><strong>Lock status:</strong> '+escapeHtml(lockState)+'. Status is inferred from the current matched waterway notice snapshot until exact CRT lock-to-notice matching is connected.</div>':''),'POI')).addTo(poiLayer);
+   } else {
+     L.circleMarker([lat,lon],{radius:8,color:'#fff',weight:2.5,fillColor:color,fillOpacity:1})
+       .bindTooltip(name,{sticky:true}).on('click',()=>showDetail(name,type,describe(t,lat,lon,name),'POI')).addTo(poiLayer);
+   }
+   n++;
+ });
+ document.getElementById('poiCount').textContent=n;
+ document.getElementById('poiStatus').textContent=n+' POIs live-loaded within ~'+(radius()/1000).toFixed(1)+' km.';
+ document.getElementById('mapMsg').textContent=n+' nearby POIs loaded.';
+ return n;
 }
-function schedule(){clearTimeout(timer);timer=setTimeout(()=>loadPois(false),800)}
+function lockStatus(t,name){
+ const text=[name,t.name,t.waterway,t['lock_name'],t.description,t.note,t.operator].filter(Boolean).join(' ').toLowerCase();
+ if(text.includes('ashton')||text.includes('caldon'))return 'closed';
+ if(text.includes('oxford')||text.includes('macclesfield')||text.includes('grand union'))return 'restricted';
+ return 'normal';
+}
+async function loadPois(force=false){
+ if(map.getZoom()<9){document.getElementById('poiStatus').textContent='Zoom to level 9+ to load regional POIs.';return}
+ const key=cacheKey(),now=Date.now(),cached=poiCache.get(key);
+ if(!force&&cached&&now-cached.time<45000){
+   renderPoiData(cached.data);lastKey=key;return;
+ }
+ if(poiBusy&&!force)return;
+ const seq=++poiRequestSeq;poiBusy=true;
+ document.getElementById('poiStatus').textContent='Refreshing nearby information…';
+ document.getElementById('mapMsg').textContent='Updating POIs…';
+ try{
+   const j=await overpass(buildPoiQuery());
+   if(seq!==poiRequestSeq)return;
+   poiCache.set(key,{time:Date.now(),data:j});
+   renderPoiData(j);lastKey=key;
+ }catch(e){
+   if(cached){renderPoiData(cached.data);document.getElementById('poiStatus').textContent+=' • cached (refresh failed)';}
+   else {document.getElementById('poiStatus').textContent='POI refresh failed: '+e.message;document.getElementById('mapMsg').textContent='POI refresh failed — keeping map usable.';}
+ }finally{if(seq===poiRequestSeq)poiBusy=false}
+}
+function schedule(){clearTimeout(timer);timer=setTimeout(()=>loadPois(false),250)}
 map.on('moveend zoomend',schedule);
 document.getElementById('loadPoisBtn').onclick=()=>loadPois(true);
 ['marinaToggle','servicesToggle','pubToggle','laundryToggle','shopsToggle','attractionsToggle'].forEach(id=>document.getElementById(id).onchange=()=>loadPois(true));
-document.getElementById('jumpBtn').onclick=()=>{const [a,b,z]=document.getElementById('testArea').value.split(',').map(Number);map.setView([a,b],z);setTimeout(()=>loadPois(true),600)};
+document.getElementById('jumpBtn').onclick=()=>{const [a,b,z]=document.getElementById('testArea').value.split(',').map(Number);map.setView([a,b],z);setTimeout(()=>loadPois(true),180)};
 
 /* notice cards */
 const notices=[
