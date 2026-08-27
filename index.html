@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1d6f8f">
-<title>UK Canal Navigator V3.7</title>
+<title>UK Canal Navigator V3.8</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
@@ -41,7 +41,7 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 <body>
 <div id="app">
 <header>
- <div><h1>UK Canal Navigator V3.7</h1><div class="sub">CRT GIS • fast GPS • fixed progressive POIs • live diagnostics • route planning</div></div>
+ <div><h1>UK Canal Navigator V3.8</h1><div class="sub">CRT GIS • fast GPS • accelerated POIs • live diagnostics • route planning</div></div>
  <div class="status" id="loadStatus">Loading CRT GIS…</div>
 </header>
 
@@ -267,8 +267,8 @@ const poiGroupLayers={
 const poiCache=new Map();
 let poiBusy=false,poiTimer=null,poiSeq=0;
 const OVERPASS_ENDPOINTS=[
- 'https://overpass.kumi.systems/api/interpreter',
  'https://overpass-api.de/api/interpreter',
+ 'https://overpass.kumi.systems/api/interpreter',
  'https://overpass.nchc.org.tw/api/interpreter'
 ];
 
@@ -331,7 +331,7 @@ function groupQuery(group){
  }
  if(group==='attractions')q.push('nwr[tourism~"attraction|museum|viewpoint"]'+a+';');
  if(!q.length)return null;
- const limit=group==='nav'?450:group==='food'?300:group==='shops'?220:group==='laundry'?100:180;
+ const limit=group==='nav'?450:group==='food'?220:group==='shops'?180:group==='laundry'?100:180;
  return '[out:json][timeout:12];('+q.join('')+');out center tags '+limit+';';
 }
 function poiCacheKey(group){
@@ -346,25 +346,34 @@ async function fetchTimeout(url,options,ms){
  try{return await fetch(url,{...options,signal:controller.signal})}
  finally{clearTimeout(timer)}
 }
-async function overpassRequest(q,group){
- const errors=[];
- for(const endpoint of OVERPASS_ENDPOINTS){
-   const started=performance.now();
-   try{
-     const body=new URLSearchParams({data:q});
-     const response=await fetchTimeout(endpoint,{method:'POST',body},9000);
-     const elapsed=Math.round(performance.now()-started);
-     if(!response.ok)throw new Error('HTTP '+response.status);
-     const data=await response.json();
-     debugLog(group+': '+data.elements.length+' elements via '+new URL(endpoint).hostname+' in '+elapsed+' ms');
-     return {data,endpoint,elapsed};
-   }catch(err){
-     const elapsed=Math.round(performance.now()-started);
-     debugLog(group+': '+new URL(endpoint).hostname+' failed after '+elapsed+' ms — '+err.message);
-     errors.push(new URL(endpoint).hostname+': '+err.message);
-   }
+async function requestEndpoint(endpoint,q,group,timeoutMs){
+ const started=performance.now();
+ try{
+   const body=new URLSearchParams({data:q});
+   const response=await fetchTimeout(endpoint,{method:'POST',body},timeoutMs);
+   const elapsed=Math.round(performance.now()-started);
+   if(!response.ok)throw new Error('HTTP '+response.status);
+   const data=await response.json();
+   debugLog(group+': '+data.elements.length+' elements via '+new URL(endpoint).hostname+' in '+elapsed+' ms');
+   return {data,endpoint,elapsed};
+ }catch(err){
+   const elapsed=Math.round(performance.now()-started);
+   debugLog(group+': '+new URL(endpoint).hostname+' failed after '+elapsed+' ms — '+err.message);
+   throw err;
  }
- throw new Error(errors.join(' | '));
+}
+async function overpassRequest(q,group){
+ try{
+   return await requestEndpoint(OVERPASS_ENDPOINTS[0],q,group,6500);
+ }catch(primaryErr){
+   debugLog(group+': primary failed; racing backup endpoints');
+ }
+ const backups=OVERPASS_ENDPOINTS.slice(1).map(ep=>requestEndpoint(ep,q,group,6000));
+ try{
+   return await Promise.any(backups);
+ }catch(err){
+   throw new Error('All Overpass endpoints failed');
+ }
 }
 function classifyPoi(t){
  if(t.waterway==='lock'||t.waterway==='lock_gate'||t.lock==='yes')return ['#111111','Lock'];
@@ -425,7 +434,7 @@ async function loadPois(force=false){
  if(poiBusy&&!force)return;
  poiBusy=true;
  progress.innerHTML=groups.map(g=>'<span id="pg-'+g+'" class="loadp">'+g+'…</span>').join('');
- status.textContent='Loading '+groups.join(', ')+' • '+(poiRadius()/1000).toFixed(1)+' km radius…';
+ status.textContent='Loading navigation first, then '+groups.filter(g=>g!=='nav').join(', ')+' • '+(poiRadius()/1000).toFixed(1)+' km radius…';
  document.getElementById('mapMsg').textContent='Loading nearby POIs…';
  const c=map.getCenter();
  debugLog('Load start: zoom='+z+', centre='+c.lat.toFixed(5)+','+c.lng.toFixed(5)+', radius='+poiRadius()+'m, groups='+groups.join(','));
@@ -438,7 +447,7 @@ async function loadPois(force=false){
      const key=poiCacheKey(group),cached=poiCache.get(key);
      let data;
      try{
-       if(!force&&cached&&Date.now()-cached.time<60000){
+       if(!force&&cached&&Date.now()-cached.time<120000){
          data=cached.data;
          debugLog(group+': cache hit ('+data.elements.length+' elements)');
        }else{
@@ -477,7 +486,7 @@ async function loadPois(force=false){
 }
 function schedulePoiLoad(){
  clearTimeout(poiTimer);
- poiTimer=setTimeout(()=>loadPois(false),220);
+ poiTimer=setTimeout(()=>loadPois(false),140);
 }
 map.on('moveend zoomend',schedulePoiLoad);
 document.getElementById('loadPoisBtn').onclick=()=>loadPois(true);
