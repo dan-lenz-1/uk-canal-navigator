@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1d6f8f">
-<title>UK Canal Navigator V3.3</title>
+<title>UK Canal Navigator V3.4</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-:root{--ink:#182027;--muted:#67737d;--line:#d9dee3;--brand:#1d6f8f;--bg:#f4f5f6;--card:#fff}
+:root{--ink:#182027;--muted:#67737d;--line:#d9dee3;--brand:#145d73;--lock:#111111;--marina:#0077b6;--food:#e85d04;--laundry:#7b2cbf;--shop:#2a9d4b;--service:#00a6a6;--attraction:#d4a017;--bg:#f4f5f6;--card:#fff}
 html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
 *{box-sizing:border-box}#app{height:100%;display:flex;flex-direction:column}
 header{background:#fff;border-bottom:1px solid var(--line);padding:10px 12px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
@@ -26,7 +26,7 @@ aside{background:#fff;border-left:1px solid var(--line);overflow:auto;padding:12
 .control-row input[type=checkbox]::before{content:"";width:11px;height:6px;border-left:3px solid white;border-bottom:3px solid white;transform:rotate(-45deg) scale(0);margin-top:-2px;transition:transform .08s ease}
 .control-row input[type=checkbox]:checked{background:var(--brand);border-color:var(--brand)}
 .control-row input[type=checkbox]:checked::before{transform:rotate(-45deg) scale(1)}
-.control-row span{font-size:14px;line-height:1.25}
+.control-row span{font-size:14px;line-height:1.25}.poi-key{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}.poi-key span{display:inline-flex;align-items:center;gap:6px;border:1px solid #d9dee3;border-radius:999px;padding:6px 9px;font-size:12px;font-weight:700}.poi-key i{width:12px;height:12px;border-radius:50%;display:inline-block}.amenities{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.amenity{display:inline-flex;gap:5px;align-items:center;background:#eef4f6;border:1px solid #d5e2e6;border-radius:8px;padding:6px 8px;font-size:12px;font-weight:650}.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px}.info-cell{border:1px solid #d9dee3;border-radius:8px;background:#fff;padding:8px}.info-cell b{display:block;font-size:11px;color:#67737d;margin-bottom:3px}.linkrow{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.linkbtn{display:inline-flex;border:1px solid #145d73;color:#145d73;text-decoration:none;border-radius:8px;padding:8px 10px;font-size:13px}.tabs2{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.tabs2 button{min-height:40px;border:1px solid #d9dee3;background:#fff;border-radius:8px;padding:7px 10px}.tabs2 button.active{background:#145d73;color:#fff}.trade-card{border:1px solid #d9dee3;border-left:5px solid #586f7c;border-radius:10px;padding:10px;margin:8px 0;background:#fafbfc}.trade-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}.trade-tags span{font-size:11px;border:1px solid #d9dee3;border-radius:999px;padding:3px 6px;background:#fff}
 select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border-radius:8px;background:#fff;font:inherit}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .field{display:grid;gap:4px;font-size:13px;margin-top:8px}.poi-count{font-weight:700}.small{font-size:11px;color:var(--muted)}
 #detailPanel{display:none}#detailPanel.active{display:block}#defaultPanel.hidden{display:none}.detail-back{border:0;background:none;color:var(--brand);padding:0;cursor:pointer;font:inherit}
@@ -39,7 +39,7 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 <body>
 <div id="app">
 <header>
- <div><h1>UK Canal Navigator V3.3</h1><div class="sub">CRT GIS • live GPS • canal-side POIs • mobile-first controls</div></div>
+ <div><h1>UK Canal Navigator V3.4</h1><div class="sub">CRT GIS • live GPS • rich POIs • route planning • marine services</div></div>
  <div class="status" id="loadStatus">Loading CRT GIS…</div>
 </header>
 
@@ -54,6 +54,29 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 <div id="envBanner" class="env-banner bad"></div>
 
 <div class="section">
+ <strong>POI map key</strong>
+ <div class="poi-key">
+  <span><i style="background:#111111"></i>Locks</span>
+  <span><i style="background:#0077b6"></i>Marinas / boatyards</span>
+  <span><i style="background:#00a6a6"></i>Water / waste / fuel</span>
+  <span><i style="background:#e85d04"></i>Pubs / food</span>
+  <span><i style="background:#7b2cbf"></i>Laundrettes</span>
+  <span><i style="background:#2a9d4b"></i>Shops</span>
+  <span><i style="background:#d4a017"></i>Attractions</span>
+ </div>
+</div>
+
+<div class="section">
+ <strong>Planning & services</strong>
+ <div class="tabs2">
+  <button type="button" class="active" id="showExplore">Explore</button>
+  <button type="button" id="showRoute">Route planner</button>
+  <button type="button" id="showTrades">Marine services</button>
+ </div>
+</div>
+
+<div id="explorePane">
+<div class="section">
  <strong>My live location</strong>
  <button class="btn" id="locateBtn">Start live GPS</button>
  <div class="control-list">
@@ -66,7 +89,7 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
  <strong>Nearby canal information</strong>
  <div class="meta">Automatically loaded around the map centre. Tap any marker for details.</div>
  <div class="control-list">
-  <label class="control-row"><input id="locksToggle" type="checkbox" checked><span>Locks</span></label>
+  <label class="control-row"><input type="checkbox" checked disabled><span><b>Locks</b> — always displayed in black</span></label>
   <label class="control-row"><input id="marinaToggle" type="checkbox" checked><span>Marinas & boatyards</span></label>
   <label class="control-row"><input id="servicesToggle" type="checkbox" checked><span>Water, waste, pump-out & fuel</span></label>
   <label class="control-row"><input id="pubToggle" type="checkbox" checked><span>Pubs, restaurants & cafés</span></label>
@@ -101,6 +124,47 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
  <div class="warn" style="margin-top:8px">Status is still matched at waterway level. Exact affected stretches are the next status-data refinement.</div>
  <div id="notices"></div>
 </div>
+</div>
+
+<div id="routePane" style="display:none">
+ <div class="section">
+  <strong>Route planner</strong>
+  <label class="field">Base marina<select id="baseMarina">
+   <option value="52.289,-1.204">Braunston Marina</option>
+   <option value="52.846,-1.560">Mercia Marina</option>
+   <option value="53.276,-2.529">Anderton Marina</option>
+   <option value="52.874,-1.296">Sawley Marina</option>
+   <option value="52.241,-1.303">Wigrams Turn Marina</option>
+  </select></label>
+  <div class="grid2">
+   <label class="field">Trip length (days)<input id="days" type="number" min="1" max="28" value="7"></label>
+   <label class="field">Hours/day<input id="hours" type="number" min="2" max="12" step=".5" value="6"></label>
+  </div>
+  <label class="field">Trip style<select id="tripStyle"><option>Out and back</option><option>Ring</option><option>One way</option></select></label>
+  <button class="btn" id="planBtn">Build cruising plan</button>
+  <div id="routeResult"></div>
+  <button class="btn secondary" id="routeTradesBtn">Find marine services for this trip</button>
+ </div>
+</div>
+
+<div id="tradesPane" style="display:none">
+ <div class="section">
+  <strong>Marine trades & repair services</strong>
+  <div class="meta">Searches around the current map centre or the last planned base marina.</div>
+  <div class="control-list">
+   <label class="control-row"><input class="tradeToggle" value="boatyard" type="checkbox" checked><span>Boatyards / dry docks</span></label>
+   <label class="control-row"><input class="tradeToggle" value="engine" type="checkbox" checked><span>Engine maintenance / diesel engineers</span></label>
+   <label class="control-row"><input class="tradeToggle" value="electrical" type="checkbox" checked><span>Marine electrical</span></label>
+   <label class="control-row"><input class="tradeToggle" value="gas" type="checkbox" checked><span>Gas / LPG engineers</span></label>
+   <label class="control-row"><input class="tradeToggle" value="blacking" type="checkbox" checked><span>Blacking / painting / hull work</span></label>
+   <label class="control-row"><input class="tradeToggle" value="welding" type="checkbox"><span>Welding / fabrication</span></label>
+  </div>
+  <button class="btn" id="tradeSearchBtn">Search nearby marine services</button>
+  <div id="tradeStatus" class="card meta">No trade search run yet.</div>
+  <div id="tradeResults"></div>
+ </div>
+</div>
+
 </div>
 </aside>
 </div>
@@ -205,13 +269,13 @@ async function callOverpass(q){
  throw Error(errs.join(' / '));
 }
 function classify(t){
- if(t.waterway==='lock'||t.waterway==='lock_gate')return ['#333','Lock'];
- if(t.leisure==='marina'||t.waterway==='boatyard')return ['#087d9d','Marina / boatyard'];
- if(t.shop==='laundry'||t.amenity==='laundry')return ['#8a5db0','Laundry'];
- if(['pub','restaurant','cafe'].includes(t.amenity))return ['#b76b2b',t.amenity];
- if(['convenience','supermarket'].includes(t.shop))return ['#5f8a45',t.shop];
- if(t.tourism)return ['#9b6a35',t.tourism];
- return ['#3a8093','Boating service'];
+ if(t.waterway==='lock'||t.waterway==='lock_gate')return ['#111111','Lock'];
+ if(t.leisure==='marina'||t.waterway==='boatyard')return ['#0077b6','Marina / boatyard'];
+ if(t.shop==='laundry'||t.amenity==='laundry')return ['#7b2cbf','Laundry'];
+ if(['pub','restaurant','cafe'].includes(t.amenity))return ['#e85d04',t.amenity];
+ if(['convenience','supermarket'].includes(t.shop))return ['#2a9d4b',t.shop];
+ if(t.tourism)return ['#d4a017',t.tourism];
+ return ['#00a6a6','Boating service'];
 }
 function detail(t){
  const a=[];
@@ -245,7 +309,7 @@ async function loadPois(force=false){
 function schedule(){clearTimeout(timer);timer=setTimeout(()=>loadPois(false),800)}
 map.on('moveend zoomend',schedule);
 document.getElementById('loadPoisBtn').onclick=()=>loadPois(true);
-['locksToggle','marinaToggle','servicesToggle','pubToggle','laundryToggle','shopsToggle','attractionsToggle'].forEach(id=>document.getElementById(id).onchange=()=>loadPois(true));
+['marinaToggle','servicesToggle','pubToggle','laundryToggle','shopsToggle','attractionsToggle'].forEach(id=>document.getElementById(id).onchange=()=>loadPois(true));
 document.getElementById('jumpBtn').onclick=()=>{const [a,b,z]=document.getElementById('testArea').value.split(',').map(Number);map.setView([a,b],z);setTimeout(()=>loadPois(true),600)};
 
 /* notice cards */
@@ -257,6 +321,59 @@ const notices=[
 const box=document.getElementById('notices');
 notices.forEach(([w,s,t])=>{const d=document.createElement('div');d.className='card notice '+s;d.innerHTML='<h3>'+w+'</h3><div>'+t+'</div>';box.appendChild(d)});
 if('serviceWorker' in navigator && isWebOrigin) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+
+/* V3.4 panel navigation */
+function showPanel(which){
+ document.getElementById('explorePane').style.display=which==='explore'?'':'none';
+ document.getElementById('routePane').style.display=which==='route'?'':'none';
+ document.getElementById('tradesPane').style.display=which==='trades'?'':'none';
+ ['showExplore','showRoute','showTrades'].forEach(id=>document.getElementById(id)?.classList.remove('active'));
+ ({explore:'showExplore',route:'showRoute',trades:'showTrades'}[which] && document.getElementById({explore:'showExplore',route:'showRoute',trades:'showTrades'}[which])?.classList.add('active'));
+}
+document.getElementById('showExplore').onclick=()=>showPanel('explore');
+document.getElementById('showRoute').onclick=()=>showPanel('route');
+document.getElementById('showTrades').onclick=()=>showPanel('trades');
+
+let plannedCentre=null;
+document.getElementById('planBtn').onclick=()=>{
+ const [lat,lon]=document.getElementById('baseMarina').value.split(',').map(Number);
+ const d=Math.max(1,Math.min(28,Number(document.getElementById('days').value)||7));
+ const h=Math.max(2,Math.min(12,Number(document.getElementById('hours').value)||6));
+ const style=document.getElementById('tripStyle').value,total=d*h,lockH=Math.round(total*.24),usable=total-lockH;
+ plannedCentre={lat,lon};map.setView([lat,lon],12);
+ let rows='';for(let i=1;i<=d;i++)rows+='<div class="card"><strong>Day '+i+'</strong><div class="meta">'+h.toFixed(1)+' cruising hours • overnight stop calculated in exact graph-routing stage</div></div>';
+ document.getElementById('routeResult').innerHTML='<div class="card"><strong>'+total+' total cruising hours</strong><div class="meta">Indicative '+Math.round(usable*1.75)+'–'+Math.round(usable*2.45)+' miles • ~'+lockH+' hours allowed for locks • '+escapeHtml(style)+'</div><div class="warn" style="margin-top:8px">This restores route planning, but exact canal routing, lock sequence and stoppage-aware overnight stops require the routable CRT graph next.</div></div>'+rows;
+};
+
+document.getElementById('routeTradesBtn').onclick=()=>{showPanel('trades');if(plannedCentre)map.setView([plannedCentre.lat,plannedCentre.lon],12);setTimeout(searchTrades,500)};
+
+function tradeQuery(){
+ const c=plannedCentre||map.getCenter(),r=12000,a='(around:'+r+','+c.lat.toFixed(6)+','+c.lng.toFixed(6)+')';
+ const selected=[...document.querySelectorAll('.tradeToggle:checked')].map(x=>x.value),q=[];
+ if(selected.includes('boatyard'))q.push('nwr[waterway=boatyard]'+a+';','nwr[craft=boatbuilder]'+a+';','nwr[industrial=shipyard]'+a+';');
+ if(selected.includes('engine'))q.push('nwr[craft=engineer]'+a+';','nwr[service=boat_engine]'+a+';','nwr[repair=boat]'+a+';');
+ if(selected.includes('electrical'))q.push('nwr[craft=electrician]'+a+';','nwr[service=marine_electrical]'+a+';');
+ if(selected.includes('gas'))q.push('nwr[craft=gas]'+a+';','nwr[service=marine_gas]'+a+';');
+ if(selected.includes('blacking'))q.push('nwr[service=boat_painting]'+a+';','nwr[craft=boatbuilder]'+a+';');
+ if(selected.includes('welding'))q.push('nwr[craft=welder]'+a+';','nwr[craft=metal_construction]'+a+';');
+ return '[out:json][timeout:25];('+q.join('')+');out center tags;';
+}
+async function searchTrades(){
+ const stat=document.getElementById('tradeStatus'),res=document.getElementById('tradeResults');stat.textContent='Searching within ~12 km…';res.innerHTML='';
+ try{
+  const j=await overpass(tradeQuery());let arr=[];
+  j.elements.forEach(e=>{const lat=e.lat??e.center?.lat,lon=e.lon??e.center?.lon;if(lat==null||lon==null)return;arr.push({lat,lon,t:e.tags||{},name:e.tags?.name||'Marine service'})});
+  const seen=new Set();arr=arr.filter(x=>{const k=x.name+'|'+x.lat.toFixed(4)+'|'+x.lon.toFixed(4);if(seen.has(k))return false;seen.add(k);return true}).slice(0,50);
+  stat.textContent=arr.length+' marine/trade services found.';
+  if(!arr.length){res.innerHTML='<div class="warn">No specialist businesses with those OSM tags were found nearby. Marine trades are less consistently mapped than pubs/marinas, so production should supplement OSM with Google Places and/or a curated waterways business directory.</div>';return}
+  arr.forEach(x=>{
+   const tags=[];if(x.t.waterway==='boatyard'||x.t.craft==='boatbuilder')tags.push('Boatyard');if(x.t.craft==='engineer'||x.t.service==='boat_engine')tags.push('Engine');if(x.t.craft==='electrician'||x.t.service==='marine_electrical')tags.push('Electrical');if(x.t.craft==='gas'||x.t.service==='marine_gas')tags.push('Gas/LPG');if(x.t.service==='boat_painting')tags.push('Blacking/Paint');if(x.t.craft==='welder')tags.push('Welding');
+   const card=document.createElement('div');card.className='trade-card';card.innerHTML='<strong>'+escapeHtml(x.name)+'</strong><div class="trade-tags">'+tags.map(z=>'<span>'+escapeHtml(z)+'</span>').join('')+'</div>'+describe(x.t,x.lat,x.lon,x.name);res.appendChild(card);
+  });
+ }catch(e){stat.textContent='Trade search failed: '+e.message}
+}
+document.getElementById('tradeSearchBtn').onclick=searchTrades;
+
 </script>
 </body>
 </html>

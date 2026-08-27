@@ -3,7 +3,6 @@
   "short_name": "Canal Navigator",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#f4f5f6",
-  "theme_color": "#1d6f8f",
-  "description": "UK canal network map with CRT GIS, GPS and local canal-side services."
+  "background_color": "#f4f6f7",
+  "theme_color": "#145d73"
 }
