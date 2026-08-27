@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1d6f8f">
-<title>UK Canal Navigator V4.0</title>
+<title>UK Canal Navigator V4.1</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
@@ -30,7 +30,9 @@ aside{background:#fff;border-left:1px solid var(--line);overflow:auto;padding:12
 select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border-radius:8px;background:#fff;font:inherit}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .field{display:grid;gap:4px;font-size:13px;margin-top:8px}.poi-count{font-weight:700}.small{font-size:11px;color:var(--muted)}
 #detailPanel{display:none}#detailPanel.active{display:block}#defaultPanel.hidden{display:none}.detail-back{border:0;background:none;color:var(--brand);padding:0;cursor:pointer;font:inherit}
-.lock-icon{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:16px;line-height:1;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.38)}.lock-normal{background:#111;color:#fff}.lock-closed{background:#d7263d;color:#fff}.lock-restricted{background:#f2b705;color:#111}.lock-icon{font-family:system-ui,-apple-system,Segoe UI,sans-serif}.debugbox{font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word;background:#12181d;color:#d9edf5;border-radius:9px;padding:9px;max-height:220px;overflow:auto;margin-top:8px}.gps-pulse{width:18px;height:18px;border-radius:50%;background:#1976d2;border:4px solid white;box-shadow:0 0 0 2px #1976d2,0 1px 5px rgba(0,0,0,.35)}
+.lock-icon{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:16px;line-height:1;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.38)}.lock-normal{background:#111;color:#fff}.lock-closed{background:#d7263d;color:#fff}.lock-restricted{background:#f2b705;color:#111}.lock-icon{font-family:system-ui,-apple-system,Segoe UI,sans-serif}.debugbox{font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word;background:#12181d;color:#d9edf5;border-radius:9px;padding:9px;max-height:220px;overflow:auto;margin-top:8px}.poi-emoji{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:17px;line-height:1;background:#fff;border:2px solid var(--poi-colour,#333);box-shadow:0 1px 5px rgba(0,0,0,.38)}
+.poi-key .emoji{width:28px;height:28px;display:inline-grid;place-items:center;border-radius:50%;background:#fff;border:2px solid #d9dee3;font-style:normal;font-size:16px;flex:0 0 28px}
+.gps-pulse{width:18px;height:18px;border-radius:50%;background:#1976d2;border:4px solid white;box-shadow:0 0 0 2px #1976d2,0 1px 5px rgba(0,0,0,.35)}
 .map-msg{position:absolute;z-index:900;left:50%;top:10px;transform:translateX(-50%);background:rgba(255,255,255,.95);border:1px solid #d6dde1;border-radius:9px;padding:7px 10px;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.15);pointer-events:none;max-width:82%;text-align:center}
 .env-banner{display:none;margin-bottom:10px}.env-banner.show{display:block}
 @media(max-width:800px){.main{grid-template-columns:1fr;grid-template-rows:minmax(480px,58vh) auto}aside{border-left:none;border-top:1px solid var(--line)}}
@@ -39,7 +41,7 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 <body>
 <div id="app">
 <header>
- <div><h1>UK Canal Navigator V4.0</h1><div class="sub">CRT GIS • fast GPS • deduplicated live POIs • lock restrictions • route planning • marine services</div></div>
+ <div><h1>UK Canal Navigator V4.1</h1><div class="sub">CRT GIS • fast GPS • emoji POIs • deduplicated locks • route planning • marine services</div></div>
  <div class="status" id="loadStatus">Loading CRT GIS…</div>
 </header>
 
@@ -56,13 +58,22 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 <div class="section">
  <strong>POI map key</strong>
  <div class="poi-key">
-  <span><i style="background:#111111"></i>Locks</span>
-  <span><i style="background:#0077b6"></i>Marinas / boatyards</span>
-  <span><i style="background:#00a6a6"></i>Water / waste / fuel</span>
-  <span><i style="background:#e85d04"></i>Pubs / food</span>
-  <span><i style="background:#7b2cbf"></i>Laundrettes</span>
-  <span><i style="background:#2a9d4b"></i>Shops</span>
-  <span><i style="background:#d4a017"></i>Attractions</span>
+  <span><em class="emoji">⚫</em> Lock</span>
+  <span><em class="emoji">❓</em> Restricted lock</span>
+  <span><em class="emoji">❌</em> Closed lock</span>
+  <span><em class="emoji">⚓</em> Marina / boatyard</span>
+  <span><em class="emoji">🚽</em> Toilets</span>
+  <span><em class="emoji">🚿</em> Showers</span>
+  <span><em class="emoji">💩</em> Pump-out / Elsan</span>
+  <span><em class="emoji">🗑️</em> Refuse / waste</span>
+  <span><em class="emoji">💧</em> Drinking water</span>
+  <span><em class="emoji">⛽</em> Fuel</span>
+  <span><em class="emoji">🍺</em> Pub</span>
+  <span><em class="emoji">🍽️</em> Restaurant</span>
+  <span><em class="emoji">☕</em> Café</span>
+  <span><em class="emoji">🧺</em> Laundrette</span>
+  <span><em class="emoji">🛒</em> Shop / supermarket</span>
+  <span><em class="emoji">🎡</em> Attraction</span>
  </div>
 </div>
 
@@ -264,7 +275,17 @@ function navQuery(){
  const a=around(),q=[];
  q.push('node[waterway=lock_gate]'+a+';','nwr[lock=yes]'+a+';','nwr[waterway=lock]'+a+';');
  if(on('marinaToggle'))q.push('nwr[leisure=marina]'+a+';','nwr[waterway=boatyard]'+a+';');
- if(on('servicesToggle'))q.push('nwr[amenity=drinking_water]'+a+';','nwr[amenity=waste_disposal]'+a+';','nwr[sanitary_dump_station=yes]'+a+';','nwr[amenity=sanitary_dump_station]'+a+';','nwr[fuel=yes]'+a+';','nwr[amenity=fuel]'+a+';');
+ if(on('servicesToggle'))q.push(
+ 'nwr[amenity=drinking_water]'+a+';',
+ 'nwr[amenity=toilets]'+a+';',
+ 'nwr[shower=yes]'+a+';',
+ 'nwr[amenity=shower]'+a+';',
+ 'nwr[amenity=waste_disposal]'+a+';',
+ 'nwr[sanitary_dump_station=yes]'+a+';',
+ 'nwr[amenity=sanitary_dump_station]'+a+';',
+ 'nwr[fuel=yes]'+a+';',
+ 'nwr[amenity=fuel]'+a+';'
+);
  return '[out:json][timeout:12];('+q.join('')+');out center tags 450;';
 }
 function amenityQuery(){
@@ -300,6 +321,35 @@ function classify(t){
  if(['convenience','supermarket','newsagent'].includes(t.shop))return ['#2a9d4b',t.shop];
  if(t.tourism)return ['#d4a017',t.tourism];
  return ['#00a6a6','Boating service'];
+}
+
+function poiEmoji(t,type){
+ if(t.leisure==='marina'||t.waterway==='boatyard')return ['⚓','#0077b6'];
+ if(t.amenity==='toilets')return ['🚽','#00a6a6'];
+ if(t.amenity==='shower'||t.shower==='yes')return ['🚿','#00a6a6'];
+ if(t.amenity==='sanitary_dump_station'||t.sanitary_dump_station==='yes')return ['💩','#795548'];
+ if(t.amenity==='waste_disposal')return ['🗑️','#607d8b'];
+ if(t.amenity==='drinking_water')return ['💧','#00a6a6'];
+ if(t.amenity==='fuel'||t.fuel==='yes')return ['⛽','#e53935'];
+ if(t.amenity==='pub')return ['🍺','#e85d04'];
+ if(t.amenity==='restaurant')return ['🍽️','#e85d04'];
+ if(t.amenity==='cafe')return ['☕','#e85d04'];
+ if(t.shop==='laundry'||t.amenity==='laundry')return ['🧺','#7b2cbf'];
+ if(['convenience','supermarket','newsagent'].includes(t.shop))return ['🛒','#2a9d4b'];
+ if(t.tourism)return ['🎡','#d4a017'];
+ return ['🛟','#00a6a6'];
+}
+function addEmojiPoi(layer,lat,lon,t,type,name){
+ const [emoji,colour]=poiEmoji(t,type);
+ const icon=L.divIcon({
+   className:'',
+   html:'<div class="poi-emoji" style="--poi-colour:'+colour+'">'+emoji+'</div>',
+   iconSize:[28,28],iconAnchor:[14,14]
+ });
+ return L.marker([lat,lon],{icon,zIndexOffset:400})
+   .bindTooltip(name,{sticky:true})
+   .on('click',()=>showDetail(name,type,richDetail(t,lat,lon,name)))
+   .addTo(layer);
 }
 function explicitLockState(t){
  const vals=[t.access,t.boat,t['lock:status'],t.operational_status,t.status,t.note,t.description].filter(Boolean).join(' ').toLowerCase();
@@ -428,8 +478,7 @@ function renderNav(j){
    if(lockElements.has(e))continue;
    const pt=elementPoint(e);if(!pt)continue;
    const t=e.tags||{},[color,type]=classify(t),name=t.name||type;
-   L.circleMarker([pt.lat,pt.lon],{radius:8,color:'#fff',weight:2.5,fillColor:color,fillOpacity:1})
-    .bindTooltip(name,{sticky:true}).on('click',()=>showDetail(name,type,richDetail(t,pt.lat,pt.lon,name))).addTo(navPoiLayer);
+   addEmojiPoi(navPoiLayer,pt.lat,pt.lon,t,type,name);
    n++;
  }
  return n;
@@ -439,8 +488,7 @@ function renderAmenities(j){
  for(const e of j.elements||[]){
    const pt=elementPoint(e);if(!pt)continue;
    const t=e.tags||{},[color,type]=classify(t),name=t.name||type;
-   L.circleMarker([pt.lat,pt.lon],{radius:8,color:'#fff',weight:2.5,fillColor:color,fillOpacity:1})
-    .bindTooltip(name,{sticky:true}).on('click',()=>showDetail(name,type,richDetail(t,pt.lat,pt.lon,name))).addTo(amenityPoiLayer);
+   addEmojiPoi(amenityPoiLayer,pt.lat,pt.lon,t,type,name);
    n++;
  }
  return n;
