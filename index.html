@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1d6f8f">
-<title>UK Canal Navigator V3.9</title>
+<title>UK Canal Navigator V4.0</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
@@ -30,7 +30,7 @@ aside{background:#fff;border-left:1px solid var(--line);overflow:auto;padding:12
 select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border-radius:8px;background:#fff;font:inherit}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .field{display:grid;gap:4px;font-size:13px;margin-top:8px}.poi-count{font-weight:700}.small{font-size:11px;color:var(--muted)}
 #detailPanel{display:none}#detailPanel.active{display:block}#defaultPanel.hidden{display:none}.detail-back{border:0;background:none;color:var(--brand);padding:0;cursor:pointer;font:inherit}
-.lock-icon{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:16px;line-height:1;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.38)}.lock-normal{background:#111;color:#fff}.lock-closed{background:#d7263d;color:#fff}.lock-restricted{background:#f2b705;color:#111}.debugbox{font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word;background:#12181d;color:#d9edf5;border-radius:9px;padding:9px;max-height:220px;overflow:auto;margin-top:8px}.gps-pulse{width:18px;height:18px;border-radius:50%;background:#1976d2;border:4px solid white;box-shadow:0 0 0 2px #1976d2,0 1px 5px rgba(0,0,0,.35)}
+.lock-icon{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:16px;line-height:1;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.38)}.lock-normal{background:#111;color:#fff}.lock-closed{background:#d7263d;color:#fff}.lock-restricted{background:#f2b705;color:#111}.lock-icon{font-family:system-ui,-apple-system,Segoe UI,sans-serif}.debugbox{font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word;background:#12181d;color:#d9edf5;border-radius:9px;padding:9px;max-height:220px;overflow:auto;margin-top:8px}.gps-pulse{width:18px;height:18px;border-radius:50%;background:#1976d2;border:4px solid white;box-shadow:0 0 0 2px #1976d2,0 1px 5px rgba(0,0,0,.35)}
 .map-msg{position:absolute;z-index:900;left:50%;top:10px;transform:translateX(-50%);background:rgba(255,255,255,.95);border:1px solid #d6dde1;border-radius:9px;padding:7px 10px;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.15);pointer-events:none;max-width:82%;text-align:center}
 .env-banner{display:none;margin-bottom:10px}.env-banner.show{display:block}
 @media(max-width:800px){.main{grid-template-columns:1fr;grid-template-rows:minmax(480px,58vh) auto}aside{border-left:none;border-top:1px solid var(--line)}}
@@ -39,13 +39,13 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 <body>
 <div id="app">
 <header>
- <div><h1>UK Canal Navigator V3.9</h1><div class="sub">CRT GIS • fast GPS • stable live POIs • lock status • route planning • marine services</div></div>
+ <div><h1>UK Canal Navigator V4.0</h1><div class="sub">CRT GIS • fast GPS • deduplicated live POIs • lock restrictions • route planning • marine services</div></div>
  <div class="status" id="loadStatus">Loading CRT GIS…</div>
 </header>
 
 <div class="main">
 <div style="position:relative;min-height:0">
- <div id="map"></div><div class="map-msg" id="mapMsg">Zoom into a canal area; POIs load automatically from zoom 13.</div>
+ <div id="map"></div><div class="map-msg" id="mapMsg">Navigation POIs load first; local amenities follow automatically as you zoom.</div>
 </div>
 <aside>
 <div id="detailPanel"></div>
@@ -186,7 +186,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,att
 const rules=[
  {match:'ashton',status:'closed'},{match:'caldon',status:'closed'},
  {match:'oxford',status:'restricted'},{match:'macclesfield',status:'restricted'},
- {match:'grand union',status:'planned'}
+ {match:'grand union',status:'restricted'}
 ];
 const styles={
  base:{color:'#1d6f8f',weight:4,opacity:.92},
@@ -243,31 +243,53 @@ document.getElementById('locateBtn').onclick=()=>{
  watch=navigator.geolocation.watchPosition(applyGpsFix,err,{enableHighAccuracy:true,maximumAge:1000,timeout:8000});
 };
 
-/* POIs — V3.9 stable single-layer renderer based on V3.3 */
-const poiLayer=L.layerGroup().addTo(map);
+/* POIs — V4.0 stable renderer, navigation first + physical-lock dedupe */
+const navPoiLayer=L.layerGroup().addTo(map);
+const amenityPoiLayer=L.layerGroup().addTo(map);
 let poiBusy=false,pendingPoiLoad=false,lastKey='',timer=null;
 const poiCache=new Map();
 const eps=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.nchc.org.tw/api/interpreter'];
+
 function on(id){return document.getElementById(id)?.checked===true}
-function radius(){const z=map.getZoom();if(z<=9)return 8500;if(z===10)return 7000;if(z===11)return 5800;if(z===12)return 4800;if(z===13)return 3800;if(z===14)return 3000;if(z===15)return 2200;return 1600}
-function query(){
- const z=map.getZoom(),c=map.getCenter(),r=radius(),a='(around:'+r+','+c.lat.toFixed(6)+','+c.lng.toFixed(6)+')',q=[];
- // Locks always on.
+function radius(){
+ const z=map.getZoom();
+ if(z<=9)return 8500;if(z===10)return 7000;if(z===11)return 5800;if(z===12)return 4800;
+ if(z===13)return 3800;if(z===14)return 3000;if(z===15)return 2200;return 1600;
+}
+function around(){
+ const c=map.getCenter();
+ return '(around:'+radius()+','+c.lat.toFixed(6)+','+c.lng.toFixed(6)+')';
+}
+function navQuery(){
+ const a=around(),q=[];
  q.push('node[waterway=lock_gate]'+a+';','nwr[lock=yes]'+a+';','nwr[waterway=lock]'+a+';');
  if(on('marinaToggle'))q.push('nwr[leisure=marina]'+a+';','nwr[waterway=boatyard]'+a+';');
  if(on('servicesToggle'))q.push('nwr[amenity=drinking_water]'+a+';','nwr[amenity=waste_disposal]'+a+';','nwr[sanitary_dump_station=yes]'+a+';','nwr[amenity=sanitary_dump_station]'+a+';','nwr[fuel=yes]'+a+';','nwr[amenity=fuel]'+a+';');
- // Wider zoom gets the most useful decision-making POIs first.
+ return '[out:json][timeout:12];('+q.join('')+');out center tags 450;';
+}
+function amenityQuery(){
+ const z=map.getZoom(),a=around(),q=[];
  if(z>=10&&on('pubToggle'))q.push('nwr[amenity~"pub|restaurant|cafe"]'+a+';');
  if(z>=11&&on('shopsToggle'))q.push('nwr[shop~"convenience|supermarket|newsagent"]'+a+';');
  if(z>=12&&on('laundryToggle'))q.push('nwr[shop=laundry]'+a+';','nwr[amenity=laundry]'+a+';');
  if(z>=13&&on('attractionsToggle'))q.push('nwr[tourism~"attraction|museum|viewpoint"]'+a+';');
- return '[out:json][timeout:14];('+q.join('')+');out center tags 650;';
+ if(!q.length)return null;
+ return '[out:json][timeout:12];('+q.join('')+');out center tags 400;';
 }
 function debugLog(m){const e=document.getElementById('poiDebug');if(e)e.textContent='['+new Date().toLocaleTimeString()+'] '+m+'\n'+e.textContent}
-async function fetchTimeout(url,opts={},ms=7000){const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);try{return await fetch(url,{...opts,signal:c.signal})}finally{clearTimeout(t)}}
-async function callOverpass(q){
+async function fetchTimeout(url,opts={},ms=6500){const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);try{return await fetch(url,{...opts,signal:c.signal})}finally{clearTimeout(t)}}
+async function callOverpass(q,label){
  let errs=[];
- for(const ep of eps){const st=performance.now();try{const r=await fetchTimeout(ep,{method:'POST',body:new URLSearchParams({data:q})},7000);if(!r.ok)throw Error('HTTP '+r.status);const j=await r.json();debugLog(j.elements.length+' elements via '+new URL(ep).hostname+' in '+Math.round(performance.now()-st)+' ms');return j}catch(e){debugLog(new URL(ep).hostname+' failed: '+e.message);errs.push(e.message)}}
+ for(const ep of eps){
+  const st=performance.now();
+  try{
+   const r=await fetchTimeout(ep,{method:'POST',body:new URLSearchParams({data:q})},6500);
+   if(!r.ok)throw Error('HTTP '+r.status);
+   const j=await r.json();
+   debugLog(label+': '+j.elements.length+' elements via '+new URL(ep).hostname+' in '+Math.round(performance.now()-st)+' ms');
+   return j;
+  }catch(e){debugLog(label+': '+new URL(ep).hostname+' failed: '+e.message);errs.push(e.message)}
+ }
  throw Error(errs.join(' / '));
 }
 function classify(t){
@@ -279,11 +301,56 @@ function classify(t){
  if(t.tourism)return ['#d4a017',t.tourism];
  return ['#00a6a6','Boating service'];
 }
-function lockState(t){
+function explicitLockState(t){
  const vals=[t.access,t.boat,t['lock:status'],t.operational_status,t.status,t.note,t.description].filter(Boolean).join(' ').toLowerCase();
  if(t.access==='no'||t.boat==='no'||/closed|closure|out of use|not operational/.test(vals))return 'closed';
  if(/restricted|restriction|limited|booking|hours|supervised/.test(vals)||['private','permissive','destination'].includes(t.access))return 'restricted';
- return 'normal';
+ return null;
+}
+function flattenLatLngs(v,out=[]){
+ if(!v)return out;
+ if(Array.isArray(v)){
+   for(const x of v){
+     if(x&&typeof x.lat==='number'&&typeof x.lng==='number')out.push(x);
+     else flattenLatLngs(x,out);
+   }
+ }
+ return out;
+}
+function pointSegmentDistance(p,a,b){
+ const vx=b.x-a.x,vy=b.y-a.y,wx=p.x-a.x,wy=p.y-a.y;
+ const c1=vx*wx+vy*wy;
+ if(c1<=0)return p.distanceTo(a);
+ const c2=vx*vx+vy*vy;
+ if(c2<=c1)return p.distanceTo(b);
+ const t=c1/c2,proj=L.point(a.x+t*vx,a.y+t*vy);
+ return p.distanceTo(proj);
+}
+function nearestWaterwayStatus(lat,lon){
+ const p=map.latLngToLayerPoint([lat,lon]);
+ let best={px:Infinity,status:null,name:null};
+ canals.eachLayer(layer=>{
+   const name=layer.feature?.properties?.name||layer.feature?.properties?.NAME||'';
+   const m=matched(name);
+   if(!m)return;
+   const pts=flattenLatLngs(layer.getLatLngs?.());
+   for(let i=1;i<pts.length;i++){
+     const a=map.latLngToLayerPoint(pts[i-1]),b=map.latLngToLayerPoint(pts[i]);
+     const d=pointSegmentDistance(p,a,b);
+     if(d<best.px)best={px:d,status:m.status,name};
+   }
+ });
+ // At normal cruising zoom this is intentionally generous enough to catch a lock centred on its chamber.
+ return best.px<=35?best:{px:best.px,status:null,name:null};
+}
+function finalLockState(t,lat,lon){
+ const own=explicitLockState(t);
+ if(own==='closed')return {state:'closed',source:'lock'};
+ const near=nearestWaterwayStatus(lat,lon);
+ if(near.status==='closed')return {state:'closed',source:near.name};
+ if(own==='restricted')return {state:'restricted',source:'lock'};
+ if(near.status==='restricted'||near.status==='planned')return {state:'restricted',source:near.name};
+ return {state:'normal',source:null};
 }
 function richDetail(t,lat,lon,name){
  const cells=[],addr=[t['addr:housenumber'],t['addr:street'],t['addr:city'],t['addr:postcode']].filter(Boolean).join(', '),phone=t.phone||t['contact:phone'],web=t.website||t['contact:website'],email=t.email||t['contact:email'];
@@ -295,35 +362,151 @@ function richDetail(t,lat,lon,name){
  const links=[];if(web)links.push('<a class="linkbtn" target="_blank" rel="noopener" href="'+esc(web)+'">Website</a>');if(phone)links.push('<a class="linkbtn" href="tel:'+esc(phone)+'">Call</a>');links.push('<a class="linkbtn" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent((name||'')+' '+lat+','+lon)+'">Google Maps</a>');html+='<div class="linkrow">'+links.join('')+'</div>';
  return html;
 }
-function renderPois(j){
- poiLayer.clearLayers();let n=0;
- for(const e of j.elements||[]){const lat=e.lat??e.center?.lat,lon=e.lon??e.center?.lon;if(lat==null||lon==null)continue;const t=e.tags||{},[color,type]=classify(t),name=t.name||type;
-  if(type==='Lock'){const st=lockState(t),cls=st==='closed'?'lock-closed':st==='restricted'?'lock-restricted':'lock-normal',sym=st==='closed'?'✕':st==='restricted'?'?':'';const icon=L.divIcon({className:'',html:'<div class="lock-icon '+cls+'">'+sym+'</div>',iconSize:[22,22],iconAnchor:[11,11]});L.marker([lat,lon],{icon,zIndexOffset:700}).bindTooltip(name+(st!=='normal'?' • '+st:''),{sticky:true}).on('click',()=>showDetail(name,'Lock',richDetail(t,lat,lon,name)+(st!=='normal'?'<div class="warn" style="margin-top:8px"><strong>Lock status:</strong> '+esc(st)+'</div>':''))).addTo(poiLayer)}
-  else L.circleMarker([lat,lon],{radius:8,color:'#fff',weight:2.5,fillColor:color,fillOpacity:1}).bindTooltip(name,{sticky:true}).on('click',()=>showDetail(name,type,richDetail(t,lat,lon,name))).addTo(poiLayer);
-  n++;
- }
- document.getElementById('poiCount').textContent=n;return n;
+function elementPoint(e){
+ const lat=e.lat??e.center?.lat,lon=e.lon??e.center?.lon;
+ return lat==null||lon==null?null:{lat,lon};
 }
-function cacheKey(){const c=map.getCenter(),z=map.getZoom(),p=z<=10?1:z<=12?2:3;return z+':'+c.lat.toFixed(p)+':'+c.lng.toFixed(p)+':'+['marinaToggle','servicesToggle','pubToggle','laundryToggle','shopsToggle','attractionsToggle'].map(id=>on(id)?1:0).join('')}
+function isLockElement(e){
+ const t=e.tags||{};
+ return t.waterway==='lock'||t.waterway==='lock_gate'||t.lock==='yes';
+}
+function lockIdentity(e){
+ const t=e.tags||{};
+ return (t.ref||t['lock:ref']||t.name||'').trim().toLowerCase();
+}
+function clusterLocks(elements){
+ const candidates=elements.filter(isLockElement).map(e=>({e,p:elementPoint(e)})).filter(x=>x.p);
+ const clusters=[];
+ for(const item of candidates){
+   const id=lockIdentity(item.e);
+   let target=null;
+   for(const c of clusters){
+     const sameId=id&&c.ids.has(id);
+     const metres=map.distance([item.p.lat,item.p.lon],[c.lat,c.lon]);
+     if(sameId||metres<=55){target=c;break}
+   }
+   if(!target){
+     target={items:[],ids:new Set(),lat:item.p.lat,lon:item.p.lon};
+     clusters.push(target);
+   }
+   target.items.push(item.e);
+   if(id)target.ids.add(id);
+   const pts=target.items.map(elementPoint).filter(Boolean);
+   target.lat=pts.reduce((s,p)=>s+p.lat,0)/pts.length;
+   target.lon=pts.reduce((s,p)=>s+p.lon,0)/pts.length;
+ }
+ return clusters;
+}
+function representativeLock(cluster){
+ // Prefer the lock/chamber object over a bare gate node because it normally carries the useful name/ref.
+ const ranked=[...cluster.items].sort((a,b)=>{
+   const ta=a.tags||{},tb=b.tags||{};
+   const sa=(ta.waterway==='lock'?4:0)+(ta.lock==='yes'?3:0)+(ta.name?2:0)+(ta.ref?1:0);
+   const sb=(tb.waterway==='lock'?4:0)+(tb.lock==='yes'?3:0)+(tb.name?2:0)+(tb.ref?1:0);
+   return sb-sa;
+ });
+ return ranked[0];
+}
+function renderNav(j){
+ navPoiLayer.clearLayers();let n=0;
+ const locks=clusterLocks(j.elements||[]);
+ const lockElements=new Set(locks.flatMap(c=>c.items));
+ for(const c of locks){
+   const e=representativeLock(c),t=e.tags||{},name=t.name||t.ref||'Lock',lat=c.lat,lon=c.lon;
+   const resolved=finalLockState(t,lat,lon),st=resolved.state;
+   const cls=st==='closed'?'lock-closed':st==='restricted'?'lock-restricted':'lock-normal';
+   const sym=st==='closed'?'✕':st==='restricted'?'?':'';
+   const icon=L.divIcon({className:'',html:'<div class="lock-icon '+cls+'">'+sym+'</div>',iconSize:[22,22],iconAnchor:[11,11]});
+   const source=resolved.source?'<div class="warn" style="margin-top:8px"><strong>Navigation status:</strong> '+esc(st)+' — matched from '+esc(resolved.source)+'.</div>':'';
+   L.marker([lat,lon],{icon,zIndexOffset:700})
+    .bindTooltip(name+(st!=='normal'?' • '+st:''),{sticky:true})
+    .on('click',()=>showDetail(name,'Lock',richDetail(t,lat,lon,name)+source))
+    .addTo(navPoiLayer);
+   n++;
+ }
+ for(const e of j.elements||[]){
+   if(lockElements.has(e))continue;
+   const pt=elementPoint(e);if(!pt)continue;
+   const t=e.tags||{},[color,type]=classify(t),name=t.name||type;
+   L.circleMarker([pt.lat,pt.lon],{radius:8,color:'#fff',weight:2.5,fillColor:color,fillOpacity:1})
+    .bindTooltip(name,{sticky:true}).on('click',()=>showDetail(name,type,richDetail(t,pt.lat,pt.lon,name))).addTo(navPoiLayer);
+   n++;
+ }
+ return n;
+}
+function renderAmenities(j){
+ amenityPoiLayer.clearLayers();let n=0;
+ for(const e of j.elements||[]){
+   const pt=elementPoint(e);if(!pt)continue;
+   const t=e.tags||{},[color,type]=classify(t),name=t.name||type;
+   L.circleMarker([pt.lat,pt.lon],{radius:8,color:'#fff',weight:2.5,fillColor:color,fillOpacity:1})
+    .bindTooltip(name,{sticky:true}).on('click',()=>showDetail(name,type,richDetail(t,pt.lat,pt.lon,name))).addTo(amenityPoiLayer);
+   n++;
+ }
+ return n;
+}
+function totalPois(){return navPoiLayer.getLayers().length+amenityPoiLayer.getLayers().length}
+function cacheKey(kind){const c=map.getCenter(),z=map.getZoom(),p=z<=10?1:z<=12?2:3;return kind+':'+z+':'+c.lat.toFixed(p)+':'+c.lng.toFixed(p)+':'+['marinaToggle','servicesToggle','pubToggle','laundryToggle','shopsToggle','attractionsToggle'].map(id=>on(id)?1:0).join('')}
 async function loadPois(force=false){
  if(map.getZoom()<9){document.getElementById('poiStatus').textContent='Zoom to level 9+ to load regional POIs.';return}
  if(poiBusy){pendingPoiLoad=true;return}
- const key=cacheKey(),cached=poiCache.get(key);
- if(!force&&key===lastKey&&cached){renderPois(cached.data);return}
- poiBusy=true;pendingPoiLoad=false;document.getElementById('poiStatus').textContent='Loading POIs…';document.getElementById('mapMsg').textContent='Loading nearby POIs…';debugLog('load start z='+map.getZoom()+' radius='+radius()+'m');
- try{let j;if(!force&&cached&&Date.now()-cached.time<90000){j=cached.data;debugLog('cache hit')}else{j=await callOverpass(query());poiCache.set(key,{time:Date.now(),data:j})}const n=renderPois(j);lastKey=key;document.getElementById('poiStatus').textContent=n+' POIs loaded within ~'+(radius()/1000).toFixed(1)+' km.';document.getElementById('mapMsg').textContent=n+' nearby POIs loaded.';debugLog('rendered '+n+' markers')}
- catch(e){document.getElementById('poiStatus').textContent='POI request failed: '+e.message;document.getElementById('mapMsg').textContent='POI refresh failed; existing markers kept.';debugLog('ERROR '+e.message)}
- finally{poiBusy=false;if(pendingPoiLoad){pendingPoiLoad=false;clearTimeout(timer);timer=setTimeout(()=>loadPois(false),80)}}
+ poiBusy=true;pendingPoiLoad=false;
+ document.getElementById('poiStatus').textContent='Loading navigation POIs…';
+ document.getElementById('mapMsg').textContent='Loading locks, marinas & services…';
+ try{
+   const navKey=cacheKey('nav'),navCached=poiCache.get(navKey);
+   let navData;
+   if(!force&&navCached&&Date.now()-navCached.time<90000){navData=navCached.data;debugLog('nav cache hit')}
+   else{navData=await callOverpass(navQuery(),'nav');poiCache.set(navKey,{time:Date.now(),data:navData})}
+   const navCount=renderNav(navData);
+   document.getElementById('poiCount').textContent=totalPois();
+   document.getElementById('poiStatus').textContent=navCount+' navigation POIs loaded; loading local amenities…';
+   document.getElementById('mapMsg').textContent=navCount+' navigation POIs loaded.';
+   const aq=amenityQuery();
+   if(aq){
+     const amenKey=cacheKey('amen'),amenCached=poiCache.get(amenKey);
+     let amenData;
+     try{
+       if(!force&&amenCached&&Date.now()-amenCached.time<90000){amenData=amenCached.data;debugLog('amenity cache hit')}
+       else{amenData=await callOverpass(aq,'amenities');poiCache.set(amenKey,{time:Date.now(),data:amenData})}
+       const amenCount=renderAmenities(amenData);
+       document.getElementById('poiStatus').textContent=totalPois()+' POIs loaded ('+navCount+' navigation, '+amenCount+' local).';
+       document.getElementById('mapMsg').textContent=totalPois()+' nearby POIs loaded.';
+     }catch(e){
+       document.getElementById('poiStatus').textContent=navCount+' navigation POIs loaded; local amenities refresh failed.';
+       debugLog('amenities ERROR '+e.message);
+     }
+   }else{
+     amenityPoiLayer.clearLayers();
+     document.getElementById('poiStatus').textContent=navCount+' navigation POIs loaded.';
+   }
+ }catch(e){
+   document.getElementById('poiStatus').textContent='Navigation POI request failed: '+e.message;
+   document.getElementById('mapMsg').textContent='Navigation POI refresh failed; existing markers kept.';
+   debugLog('nav ERROR '+e.message);
+ }finally{
+   poiBusy=false;
+   if(pendingPoiLoad){pendingPoiLoad=false;clearTimeout(timer);timer=setTimeout(()=>loadPois(false),80)}
+ }
 }
-function schedule(){clearTimeout(timer);timer=setTimeout(()=>loadPois(false),180)}
+function schedule(){clearTimeout(timer);timer=setTimeout(()=>loadPois(false),160)}
 map.on('moveend zoomend',schedule);
 document.getElementById('loadPoisBtn').onclick=()=>loadPois(true);
 ['marinaToggle','servicesToggle','pubToggle','laundryToggle','shopsToggle','attractionsToggle'].forEach(id=>{const e=document.getElementById(id);if(e)e.onchange=()=>loadPois(true)});
-document.getElementById('jumpBtn').onclick=()=>{const [a,b,z]=document.getElementById('testArea').value.split(',').map(Number);map.setView([a,b],z);setTimeout(()=>loadPois(true),220)};
-const diag=document.getElementById('diagBtn');if(diag)diag.onclick=async()=>{debugLog('manual diagnostic z='+map.getZoom()+', centre='+map.getCenter().lat.toFixed(5)+','+map.getCenter().lng.toFixed(5));try{const j=await callOverpass(query());debugLog('diagnostic returned '+j.elements.length+' elements; rendering same response');const n=renderPois(j);document.getElementById('poiStatus').textContent=n+' POIs rendered by diagnostic.'}catch(e){debugLog('diagnostic failed '+e.message)}};
+document.getElementById('jumpBtn').onclick=()=>{const [a,b,z]=document.getElementById('testArea').value.split(',').map(Number);map.setView([a,b],z);setTimeout(()=>loadPois(true),180)};
+const diag=document.getElementById('diagBtn');
+if(diag)diag.onclick=async()=>{
+ debugLog('manual diagnostic z='+map.getZoom()+', centre='+map.getCenter().lat.toFixed(5)+','+map.getCenter().lng.toFixed(5));
+ try{
+  const nav=await callOverpass(navQuery(),'nav diagnostic');const n=renderNav(nav);debugLog('diagnostic rendered '+n+' navigation markers');
+  const aq=amenityQuery();if(aq){const am=await callOverpass(aq,'amenity diagnostic');const m=renderAmenities(am);debugLog('diagnostic rendered '+m+' amenity markers')}
+  document.getElementById('poiCount').textContent=totalPois();
+  document.getElementById('poiStatus').textContent=totalPois()+' POIs rendered by diagnostic.';
+ }catch(e){debugLog('diagnostic failed '+e.message)}
+};
 
 /* notice cards */
-const notices=[['Ashton Canal','closed','Active closure'],['Caldon Canal','closed','Active closure'],['Oxford Canal','restricted','Restricted operation'],['Macclesfield Canal','restricted','Restricted operation'],['Grand Union Canal','planned','Planned issue']];
+const notices=[['Ashton Canal','closed','Active closure'],['Caldon Canal','closed','Active closure'],['Oxford Canal','restricted','Restricted operation'],['Macclesfield Canal','restricted','Restricted operation'],['Grand Union Canal','restricted','Restricted operation']];
 const box=document.getElementById('notices');notices.forEach(([w,s,t])=>{const d=document.createElement('div');d.className='card notice '+s;d.innerHTML='<h3>'+w+'</h3><div>'+t+'</div>';box.appendChild(d)});
 if('serviceWorker' in navigator&&isWebOrigin)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 

@@ -1,13 +1,18 @@
-UK Canal Navigator V3.9
+UK Canal Navigator V4.0
 
-Rebased on V3.3 single-layer POI renderer.
-Fixes the V3.7/V3.8 stuck poiBusy race condition.
-- single persistent poiLayer
-- queued refresh rather than request cancellation
-- fast overpass-api.de first
-- dynamic radius from zoom 9
-- permanent black locks, red X closed, yellow ? restricted when OSM status tags support it
-- rich POI details and marina amenity icons
-- fast GPS
-- route planner and marine services retained from V3.4
-- manual diagnostic now renders the same returned POIs onto the map
+Changes from V3.9:
+- Physical lock deduplication: nearby OSM lock chamber / lock=yes / lock_gate records are clustered into ONE lock marker.
+- 55 metre clustering threshold, with same name/ref records always merged.
+- Prefers the lock/chamber feature as the representative record instead of a bare gate node.
+- Locks inherit the nearest matched CRT waterway status unless the lock record has a stronger explicit status:
+    black = normal/unmatched
+    yellow ? = restricted/planned passage
+    red X = closed
+- Generic Grand Union status changed from planned/purple to restricted/yellow in the current snapshot.
+- Navigation-critical POIs load first: locks, marinas, boating services.
+- Food/shops/laundry/attractions load in a second request so navigation points appear sooner.
+- Existing stable queued-refresh model from V3.9 retained.
+- Diagnostic now renders the exact deduplicated lock results.
+
+Note:
+Lock status is still based on the current matched waterway snapshot + OSM lock tags. Authoritative lock-by-lock CRT notice association remains a future data connector.
