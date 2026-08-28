@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1d6f8f">
-<title>UK Canal Navigator V4.5</title>
+<title>UK Canal Navigator V4.6</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
@@ -40,6 +40,8 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 .itinerary-day{border:1px solid #d9dee3;border-radius:10px;padding:10px;margin:8px 0;background:#fff}
 .itinerary-day .daytitle{font-weight:800}.itinerary-day .stop{font-size:14px;margin-top:4px}.itinerary-day .ideas{font-size:12px;color:#64717a;margin-top:5px}
 .restriction-note{border-left:5px solid #f2b705;background:#fff8e5;border-radius:8px;padding:8px 9px;margin-top:7px;font-size:12px}
+.route-wait{border-left:5px solid #4c78a8;background:#eef6fb;border-radius:8px;padding:8px 9px;margin-top:7px;font-size:12px}
+.route-error{border-left:5px solid #c94a4a;background:#fff0f0;border-radius:8px;padding:9px;margin-top:8px;font-size:13px}
 .print-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.print-actions button{width:auto}
 @media print{body>*{display:none!important}#printSheet{display:block!important;position:absolute;inset:0;background:#fff;color:#111;padding:20px}}
 .gps-pulse{width:18px;height:18px;border-radius:50%;background:#1976d2;border:4px solid white;box-shadow:0 0 0 2px #1976d2,0 1px 5px rgba(0,0,0,.35)}
@@ -51,7 +53,7 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 <body>
 <div id="app">
 <header>
- <div><h1>UK Canal Navigator V4.5</h1><div class="sub">CRT GIS • GPS • lock restriction times • winding holes • rich POIs • itinerary planner</div></div>
+ <div><h1>UK Canal Navigator V4.6</h1><div class="sub">CRT GIS • canal-following routes • restriction-aware itineraries • rich POIs</div></div>
  <div class="status" id="loadStatus">Loading CRT GIS…</div>
 </header>
 
@@ -238,9 +240,10 @@ const canals=L.geoJSON(null,{
     :'No current snapshot notice is matched. This does not guarantee unrestricted passage.'));
  }
 }).addTo(map);
+let CRT_GEOJSON=null,CANAL_GRAPH=null;
 const CRT='https://services.arcgis.com/DknzyjEEie5tEW0u/arcgis/rest/services/Canal_And_River_Trust_Canals_By_Navigation_View/FeatureServer/1/query?where=1%3D1&outFields=*&outSR=4326&f=geojson';
 fetch(CRT).then(r=>{if(!r.ok)throw Error(r.status);return r.json()}).then(g=>{
- canals.addData(g);document.getElementById('loadStatus').textContent='CRT GIS loaded • '+g.features.length+' features';
+ CRT_GEOJSON=g;canals.addData(g);document.getElementById('loadStatus').textContent='CRT GIS loaded • '+g.features.length+' features';
  document.getElementById('loadStatus').style.background='#e9f6ed';
  if(canals.getBounds().isValid())map.fitBounds(canals.getBounds(),{padding:[12,12]});
 }).catch(e=>document.getElementById('loadStatus').textContent='CRT GIS failed: '+e.message);
@@ -667,26 +670,235 @@ document.getElementById('showRoute').onclick=()=>showPanel('route');
 document.getElementById('showTrades').onclick=()=>showPanel('trades');
 
 let plannedCentre=null,currentItinerary=null,routeOverlay=null;
+
 const locationIdeas={'Braunston Marina':['Braunston village','Canal-side pubs','Historic junction and marina'],'Oxford':['Oxford city centre','University colleges','Covered Market'],'Birmingham':['Gas Street Basin','Brindleyplace','Jewellery Quarter'],'Mercia Marina':['Mercia Boardwalk','Willington pubs','Trent & Mersey walks'],'Anderton Marina':['Anderton Boat Lift','Northwich','River Weaver'],'Sawley Marina':['Shardlow','Trent junction','Waterside pubs'],'Wigrams Turn Marina':['Napton','Braunston','Warwickshire countryside'],'Leeds':['Leeds waterfront','Royal Armouries','City-centre food'],'Stone':['Stone town centre','Canal-side pubs','Local shops']};
-const restrictionRules=[{match:'Oxford',open:'10:00',close:'14:00',note:'Matched restriction model: selected Oxford Canal lock flights may have limited operating hours.'},{match:'Macclesfield',open:'09:00',close:'13:00',note:'Matched restriction model: restricted lock-flight operating window.'},{match:'Grand Union',open:'09:00',close:'14:00',note:'Matched restriction model: selected restricted passages should be cleared before afternoon closure.'}];
+
 function parseLoc(v){const [name,lat,lon]=v.split('|');return{name,lat:Number(lat),lon:Number(lon)}}
 function toMin(t){const [h,m]=t.split(':').map(Number);return h*60+m}
 function fmtTime(n){n=Math.round(n);return String(Math.floor(n/60)%24).padStart(2,'0')+':'+String(n%60).padStart(2,'0')}
 function fmtDate(d){return d.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short',year:'numeric'})}
-function estimateMiles(a,b){return Math.max(5,(map.distance([a.lat,a.lon],[b.lat,b.lon])/1000)*0.621371*1.45)}
-function restrictionFor(a,b){const s=(a.name+' '+b.name).toLowerCase();if(s.includes('oxford'))return restrictionRules[0];if(s.includes('macclesfield'))return restrictionRules[1];if(s.includes('braunston')||s.includes('birmingham'))return restrictionRules[2];return null}
-function mooringName(end,i,last){if(last)return end.name;return ['Visitor mooring','Village / pub mooring','Serviced marina mooring','Quiet rural mooring','Town-centre mooring'][i%5]}
-function buildItinerary(){const mode=document.getElementById('boatMode').value,start=parseLoc(document.getElementById('baseMarina').value),end=parseLoc(document.getElementById('endMarina').value),days=Math.max(1,Math.min(28,Number(document.getElementById('days').value)||7)),dailyHours=Math.max(2,Math.min(12,Number(document.getElementById('hours').value)||6)),startTime=document.getElementById('dayStart').value||'09:00',dateStr=document.getElementById('startDate').value,startDate=dateStr?new Date(dateStr+'T12:00:00'):new Date(),style=document.getElementById('tripStyle').value;
-let distance=mode==='private'?estimateMiles(start,end):Math.max(18,dailyHours*days*1.7),lockHours=Math.max(1,distance/28),totalHours=distance/2+lockHours,restriction=restrictionFor(start,end),remaining=distance,itin=[];
-for(let i=0;i<days&&remaining>.1;i++){const date=new Date(startDate);date.setDate(startDate.getDate()+i);const depart=toMin(startTime);let available=dailyHours*60,note='';if(restriction){const close=toMin(restriction.close);if(depart>=close){available=0;note='No passage planned: restriction closes at '+restriction.close+'.';}else{available=Math.min(available,close-depart);if(available<dailyHours*60)note='Day shortened to clear restricted passage before '+restriction.close+'.';}}const hrs=available/60,miles=Math.min(remaining,Math.max(0,hrs*1.7));remaining-=miles;const stop=mooringName(end,i,remaining<=.1),ideas=(locationIdeas[stop]||locationIdeas[end.name]||['Explore nearby village/town','Waterside pub or café','Top up water / check services']).slice(0,3);itin.push({day:i+1,date:fmtDate(date),depart:fmtTime(depart),arrive:fmtTime(depart+available),hours:hrs,miles,stop,ideas,restriction:note});if(available===0)break;}
-currentItinerary={mode,start,end,startDate:fmtDate(startDate),distance,lockHours,totalHours,itinerary:itin,remaining,restriction,style};plannedCentre={lat:start.lat,lon:start.lon};
-if(routeOverlay)map.removeLayer(routeOverlay);routeOverlay=L.polyline([[start.lat,start.lon],[end.lat,end.lon]],{color:'#145d73',weight:5,dashArray:'10 7'}).addTo(map);map.fitBounds(routeOverlay.getBounds(),{padding:[35,35]});
-let html='<div class="card"><div class="route-summary"><div class="metric"><span class="meta">Indicative distance</span><b>'+distance.toFixed(0)+' mi</b></div><div class="metric"><span class="meta">Cruising + locks</span><b>~'+totalHours.toFixed(1)+' h</b></div><div class="metric"><span class="meta">Start</span><b style="font-size:14px">'+esc(start.name)+'</b></div><div class="metric"><span class="meta">Destination</span><b style="font-size:14px">'+esc(end.name)+'</b></div></div><div class="warn" style="margin-top:9px">Indicative until the exact routable CRT graph is connected. Restriction windows are applied to daily timings where matched.</div></div>';
-itin.forEach(d=>html+='<div class="itinerary-day"><div class="daytitle">Day '+d.day+' • '+esc(d.date)+'</div><div class="stop"><strong>'+esc(d.stop)+'</strong> • '+d.miles.toFixed(1)+' mi • '+d.hours.toFixed(1)+' h</div><div class="meta">'+d.depart+' → '+d.arrive+'</div>'+(d.restriction?'<div class="restriction-note">'+esc(d.restriction)+'</div>':'')+'<div class="ideas">Ideas: '+d.ideas.map(esc).join(' • ')+'</div></div>');
-html+=remaining>.1?'<div class="bad"><strong>Not achievable in selected days.</strong><br>About '+remaining.toFixed(0)+' miles remain.</div>':'<div class="ok"><strong>Indicative itinerary reaches the destination.</strong></div>';document.getElementById('routeResult').innerHTML=html;document.getElementById('printItineraryBtn').disabled=false;setTimeout(()=>loadPois(true),200);}
+function nodeKey(lat,lon){return lat.toFixed(5)+','+lon.toFixed(5)}
+function edgeStatus(name){return matched(name)?.status||'base'}
+function restrictionWindow(name){
+ const hit=lockRestrictionWindows.find(r=>String(name||'').toLowerCase().includes(r.match.toLowerCase()));
+ return hit?{open:hit.open,close:hit.close}:null;
+}
+
+function buildCanalGraph(){
+ if(CANAL_GRAPH)return CANAL_GRAPH;
+ if(!CRT_GEOJSON)throw Error('CRT canal network is still loading. Try the planner again once “CRT GIS loaded” is shown.');
+ const nodes=new Map(),adj=new Map(),endpoints=[];
+ function addNode(lat,lon){const k=nodeKey(lat,lon);if(!nodes.has(k))nodes.set(k,[lat,lon]);if(!adj.has(k))adj.set(k,[]);return k}
+ function addEdge(a,b,w,name){
+   if(a===b||!isFinite(w)||w<=0)return;
+   adj.get(a).push({to:b,w,name,status:edgeStatus(name)});
+   adj.get(b).push({to:a,w,name,status:edgeStatus(name)});
+ }
+ function consumeLine(coords,name){
+   if(!coords||coords.length<2)return;
+   let prev=null,first=null,last=null;
+   coords.forEach(c=>{
+     const lon=Number(c[0]),lat=Number(c[1]);if(!isFinite(lat)||!isFinite(lon))return;
+     const k=addNode(lat,lon);if(first===null)first=k;last=k;
+     if(prev){const a=nodes.get(prev),b=nodes.get(k);addEdge(prev,k,map.distance(a,b),name)}
+     prev=k;
+   });
+   if(first&&last){endpoints.push(first);if(last!==first)endpoints.push(last)}
+ }
+ for(const f of CRT_GEOJSON.features||[]){
+   const name=f.properties?.name||f.properties?.NAME||'CRT waterway',g=f.geometry||{};
+   if(g.type==='LineString')consumeLine(g.coordinates,name);
+   if(g.type==='MultiLineString')for(const line of g.coordinates||[])consumeLine(line,name);
+ }
+ // Join very close feature endpoints so junctions split across separate CRT features remain routable.
+ const grid=new Map(),cell=.0005;
+ function bucket(ll){return Math.floor(ll[0]/cell)+','+Math.floor(ll[1]/cell)}
+ for(const k of endpoints){const ll=nodes.get(k),b=bucket(ll);if(!grid.has(b))grid.set(b,[]);grid.get(b).push(k)}
+ for(const k of endpoints){
+   const a=nodes.get(k),gx=Math.floor(a[0]/cell),gy=Math.floor(a[1]/cell);
+   for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
+     for(const other of grid.get((gx+dx)+','+(gy+dy))||[]){
+       if(other===k)continue;const b=nodes.get(other),d=map.distance(a,b);
+       if(d<=35)addEdge(k,other,d,'CRT junction');
+     }
+   }
+ }
+ CANAL_GRAPH={nodes,adj};
+ return CANAL_GRAPH;
+}
+
+function nearestGraphNode(loc,graph){
+ let best=null,bestD=Infinity;
+ for(const [k,ll] of graph.nodes){const d=map.distance([loc.lat,loc.lon],ll);if(d<bestD){bestD=d;best=k}}
+ return {key:best,distance:bestD};
+}
+
+class MinHeap{
+ constructor(){this.a=[]}
+ push(item){this.a.push(item);let i=this.a.length-1;while(i){let p=(i-1)>>1;if(this.a[p][0]<=item[0])break;this.a[i]=this.a[p];i=p}this.a[i]=item}
+ pop(){if(!this.a.length)return null;const root=this.a[0],last=this.a.pop();if(this.a.length){let i=0;while(true){let l=i*2+1,r=l+1;if(l>=this.a.length)break;let c=r<this.a.length&&this.a[r][0]<this.a[l][0]?r:l;if(this.a[c][0]>=last[0])break;this.a[i]=this.a[c];i=c}this.a[i]=last}return root}
+ get length(){return this.a.length}
+}
+
+function canalRoute(start,end){
+ const graph=buildCanalGraph(),s=nearestGraphNode(start,graph),t=nearestGraphNode(end,graph);
+ if(!s.key||!t.key)throw Error('Could not snap the selected locations to the CRT network.');
+ if(s.distance>2500||t.distance>2500)throw Error('One of the selected locations is too far from the CRT canal network.');
+ const dist=new Map([[s.key,0]]),prev=new Map(),heap=new MinHeap();heap.push([0,s.key]);
+ while(heap.length){
+   const [d,u]=heap.pop();if(d!==dist.get(u))continue;if(u===t.key)break;
+   for(const e of graph.adj.get(u)||[]){
+     const nd=d+e.w;if(nd<(dist.get(e.to)??Infinity)){dist.set(e.to,nd);prev.set(e.to,{from:u,edge:e});heap.push([nd,e.to])}
+   }
+ }
+ if(!dist.has(t.key))throw Error('No connected canal route was found between these locations in the loaded CRT network.');
+ const keys=[],edges=[];let cur=t.key;
+ while(cur!==s.key){keys.push(cur);const p=prev.get(cur);if(!p)break;edges.push(p.edge);cur=p.from}
+ keys.push(s.key);keys.reverse();edges.reverse();
+ const coords=keys.map(k=>graph.nodes.get(k));
+ return {coords,edges,distanceM:dist.get(t.key),snapStartM:s.distance,snapEndM:t.distance};
+}
+
+function routeEvents(route){
+ let metres=0,lastRestriction=null,events=[],closed=[];
+ route.edges.forEach((e,i)=>{
+   const st=e.status,name=e.name||'CRT waterway';
+   if(st==='closed'){
+     if(!closed.some(x=>x.name===name))closed.push({name,atM:metres});
+   }
+   if(st==='restricted'){
+     const win=restrictionWindow(name);
+     const sig=name+'|'+(win?win.open+'-'+win.close:'');
+     if(sig!==lastRestriction){
+       events.push({atM:metres,name,status:'restricted',window:win,passageMin:45,coord:route.coords[Math.min(i,route.coords.length-1)]});
+       lastRestriction=sig;
+     }
+   }else lastRestriction=null;
+   metres+=e.w;
+ });
+ return {events,closed};
+}
+
+function mooringName(end,day,last,hold){
+ if(hold)return 'Moor before '+hold;
+ if(last)return end.name;
+ return ['Visitor mooring','Village / pub mooring','Serviced marina mooring','Quiet rural mooring','Town-centre mooring'][day%5];
+}
+
+function scheduleJourney(route,start,end,days,dailyHours,startTime,startDate){
+ const speedMph=1.7,metresPerMin=speedMph*1609.344/60,totalM=route.distanceM;
+ const state=routeEvents(route);
+ if(state.closed.length)return {closed:state.closed,itinerary:[],remainingM:totalM,events:state.events};
+ let progress=0,eventIndex=0,itin=[];
+ for(let day=0;day<days&&progress<totalM-5;day++){
+   const date=new Date(startDate);date.setDate(startDate.getDate()+day);
+   let now=toMin(startTime),dayEnd=now+dailyHours*60,notes=[],waits=[],startProgress=progress,hold=null;
+   while(now<dayEnd-0.1&&progress<totalM-5){
+     const ev=state.events[eventIndex];
+     const target=ev?Math.max(progress,ev.atM):totalM;
+     const travelM=Math.max(0,target-progress),travelMin=travelM/metresPerMin;
+     if(now+travelMin>dayEnd){
+       const mins=dayEnd-now;progress+=mins*metresPerMin;now=dayEnd;break;
+     }
+     progress=target;now+=travelMin;
+     if(!ev){break}
+     if(!ev.window){
+       notes.push('Restricted passage at '+ev.name+' has no operating hours in the current snapshot; verify before travel.');
+       now+=Math.min(ev.passageMin,Math.max(0,dayEnd-now));eventIndex++;continue;
+     }
+     const open=toMin(ev.window.open),close=toMin(ev.window.close);
+     if(now<open){
+       if(open+ev.passageMin>dayEnd){hold=ev.name;waits.push('Reached '+ev.name+' at '+fmtTime(now)+'; opening is '+ev.window.open+'. Moor and pass the following cruising day.');break}
+       waits.push('Reached '+ev.name+' at '+fmtTime(now)+'; wait until '+ev.window.open+' for restricted passage.');
+       now=open;
+     }
+     if(now+ev.passageMin>close){
+       hold=ev.name;waits.push('Reached '+ev.name+' at '+fmtTime(now)+', too late to clear the '+ev.window.open+'–'+ev.window.close+' window. Moor before the lock and resume next day.');break;
+     }
+     notes.push('Pass '+ev.name+' during restriction window '+ev.window.open+'–'+ev.window.close+' (allow ~'+ev.passageMin+' min).');
+     now+=ev.passageMin;eventIndex++;
+     // Crucially, continue cruising after the restricted lock if daily cruising time remains.
+   }
+   const movedM=Math.max(0,progress-startProgress),miles=movedM/1609.344,last=progress>=totalM-5;
+   const stop=mooringName(end,day,last,hold),ideas=(locationIdeas[stop]||locationIdeas[end.name]||['Explore nearby village/town','Waterside pub or café','Top up water / check services']).slice(0,3);
+   itin.push({day:day+1,date:fmtDate(date),depart:fmtTime(toMin(startTime)),arrive:fmtTime(now),hours:(now-toMin(startTime))/60,miles,stop,ideas,notes,waits,hold});
+   // If held at a restricted passage, eventIndex deliberately remains unchanged for next day.
+ }
+ return {closed:[],itinerary:itin,remainingM:Math.max(0,totalM-progress),events:state.events};
+}
+
+function buildItinerary(){
+ const mode=document.getElementById('boatMode').value,start=parseLoc(document.getElementById('baseMarina').value),end=parseLoc(document.getElementById('endMarina').value);
+ const days=Math.max(1,Math.min(28,Number(document.getElementById('days').value)||7)),dailyHours=Math.max(2,Math.min(12,Number(document.getElementById('hours').value)||6));
+ const startTime=document.getElementById('dayStart').value||'09:00',dateStr=document.getElementById('startDate').value,startDate=dateStr?new Date(dateStr+'T12:00:00'):new Date(),style=document.getElementById('tripStyle').value;
+ const result=document.getElementById('routeResult');
+ result.innerHTML='<div class="card">Building canal-following route…</div>';
+ try{
+   let route=canalRoute(start,end);
+   const schedule=scheduleJourney(route,start,end,days,dailyHours,startTime,startDate);
+   const distance=route.distanceM/1609.344,totalHours=distance/1.7;
+   plannedCentre={lat:start.lat,lon:start.lon};
+   if(routeOverlay)map.removeLayer(routeOverlay);
+   routeOverlay=L.polyline(route.coords,{color:'#145d73',weight:6,opacity:.94}).addTo(map);
+   map.fitBounds(routeOverlay.getBounds(),{padding:[35,35]});
+
+   if(schedule.closed.length){
+     const names=[...new Set(schedule.closed.map(x=>x.name))];
+     currentItinerary={start,end,route,schedule,startDate:fmtDate(startDate),distance,totalHours,blocked:true};
+     result.innerHTML='<div class="route-error"><strong>Route blocked by a closure.</strong><br>'+names.map(esc).join(' • ')+'<br><br>Because this is a complete closure, the planner has abandoned the through-route rather than assuming a reopening time.</div>';
+     document.getElementById('printItineraryBtn').disabled=true;
+     return;
+   }
+
+   currentItinerary={mode,start,end,startDate:fmtDate(startDate),distance,totalHours,itinerary:schedule.itinerary,remainingM:schedule.remainingM,route,schedule,style,blocked:false};
+   let html='<div class="card"><div class="route-summary">'+
+    '<div class="metric"><span class="meta">CRT-network distance</span><b>'+distance.toFixed(1)+' mi</b></div>'+
+    '<div class="metric"><span class="meta">Indicative cruising</span><b>~'+totalHours.toFixed(1)+' h</b></div>'+
+    '<div class="metric"><span class="meta">Start snap</span><b style="font-size:13px">'+Math.round(route.snapStartM)+' m</b></div>'+
+    '<div class="metric"><span class="meta">End snap</span><b style="font-size:13px">'+Math.round(route.snapEndM)+' m</b></div>'+
+    '</div><div class="ok" style="margin-top:9px"><strong>Route now follows CRT canal geometry.</strong> Restricted passages are treated as timed events: the planner can wait overnight and continue when they reopen.</div></div>';
+
+   schedule.itinerary.forEach(d=>{
+     html+='<div class="itinerary-day"><div class="daytitle">Day '+d.day+' • '+esc(d.date)+'</div>'+
+      '<div class="stop"><strong>'+esc(d.stop)+'</strong> • '+d.miles.toFixed(1)+' mi • '+d.hours.toFixed(1)+' h</div>'+
+      '<div class="meta">'+d.depart+' → '+d.arrive+'</div>'+
+      d.notes.map(n=>'<div class="restriction-note">'+esc(n)+'</div>').join('')+
+      d.waits.map(n=>'<div class="route-wait">'+esc(n)+'</div>').join('')+
+      '<div class="ideas">Ideas: '+d.ideas.map(esc).join(' • ')+'</div></div>';
+   });
+   html+=schedule.remainingM>5
+     ?'<div class="bad"><strong>Not achievable within the selected '+days+' days.</strong><br>About '+(schedule.remainingM/1609.344).toFixed(1)+' canal miles remain. Restrictions have been carried forward to later days rather than treated as closures.</div>'
+     :'<div class="ok"><strong>Indicative itinerary reaches the destination within the selected schedule.</strong></div>';
+   result.innerHTML=html;
+   document.getElementById('printItineraryBtn').disabled=false;
+   setTimeout(()=>loadPois(true),200);
+ }catch(e){
+   if(routeOverlay){map.removeLayer(routeOverlay);routeOverlay=null}
+   result.innerHTML='<div class="route-error"><strong>Could not build a reliable canal route.</strong><br>'+esc(e.message)+'<br><br>No straight-line fallback has been drawn.</div>';
+   document.getElementById('printItineraryBtn').disabled=true;
+ }
+}
+
 document.getElementById('planBtn').onclick=buildItinerary;
-document.getElementById('boatMode').onchange=()=>{const hire=document.getElementById('boatMode').value==='hire';document.getElementById('endField').style.opacity=hire?.65:1;document.getElementById('tripStyleField').style.display=hire?'':'none';};document.getElementById('boatMode').dispatchEvent(new Event('change'));
-document.getElementById('printItineraryBtn').onclick=()=>{if(!currentItinerary)return;const it=currentItinerary;let body='<h1>UK Canal Navigator — Proposed Itinerary</h1><p><strong>'+esc(it.start.name)+' → '+esc(it.end.name)+'</strong></p><p>Start: '+esc(it.startDate)+' | Distance: '+it.distance.toFixed(0)+' miles | Cruising/locks: ~'+it.totalHours.toFixed(1)+' hours</p>';if(it.restriction)body+='<p><strong>Restriction considered:</strong> '+esc(it.restriction.note)+' '+it.restriction.open+'–'+it.restriction.close+'.</p>';it.itinerary.forEach(d=>body+='<hr><h2>Day '+d.day+' — '+esc(d.date)+'</h2><p><strong>'+esc(d.stop)+'</strong><br>'+d.miles.toFixed(1)+' miles • '+d.hours.toFixed(1)+' hours • '+d.depart+'–'+d.arrive+'</p>'+(d.restriction?'<p><strong>Restriction:</strong> '+esc(d.restriction)+'</p>':'')+'<p>Ideas: '+d.ideas.map(esc).join(' • ')+'</p>');const sheet=document.getElementById('printSheet');sheet.innerHTML=body+'<p style="margin-top:30px;font-size:11px;color:#666">Verify current CRT notices, signage and local conditions before navigation.</p>';sheet.style.display='block';window.print();setTimeout(()=>sheet.style.display='none',500);};
+document.getElementById('boatMode').onchange=()=>{const hire=document.getElementById('boatMode').value==='hire';document.getElementById('endField').style.opacity=hire?.65:1;document.getElementById('tripStyleField').style.display=hire?'':'none';};
+document.getElementById('boatMode').dispatchEvent(new Event('change'));
+
+document.getElementById('printItineraryBtn').onclick=()=>{
+ if(!currentItinerary||currentItinerary.blocked)return;
+ const it=currentItinerary;
+ let body='<h1>UK Canal Navigator — Proposed Itinerary</h1><p><strong>'+esc(it.start.name)+' → '+esc(it.end.name)+'</strong></p>'+
+ '<p>Start: '+esc(it.startDate)+' | CRT-network distance: '+it.distance.toFixed(1)+' miles | Indicative cruising: ~'+it.totalHours.toFixed(1)+' hours</p>';
+ it.itinerary.forEach(d=>{
+   body+='<hr><h2>Day '+d.day+' — '+esc(d.date)+'</h2><p><strong>'+esc(d.stop)+'</strong><br>'+d.miles.toFixed(1)+' miles • '+d.hours.toFixed(1)+' hours • '+d.depart+'–'+d.arrive+'</p>';
+   d.notes.forEach(n=>body+='<p><strong>Restriction:</strong> '+esc(n)+'</p>');
+   d.waits.forEach(n=>body+='<p><strong>Waiting/mooring:</strong> '+esc(n)+'</p>');
+   body+='<p>Ideas: '+d.ideas.map(esc).join(' • ')+'</p>';
+ });
+ const sheet=document.getElementById('printSheet');
+ sheet.innerHTML=body+'<p style="margin-top:30px;font-size:11px;color:#666">Route follows loaded CRT canal geometry. Restriction windows are based on the app’s current matched restriction snapshot; verify live CRT notices before navigation.</p>';
+ sheet.style.display='block';window.print();setTimeout(()=>sheet.style.display='none',500);
+};
+
 document.getElementById('routeTradesBtn').onclick=()=>{showPanel('trades');if(plannedCentre)map.setView([plannedCentre.lat,plannedCentre.lon],12);setTimeout(searchTrades,500)};
 function tradeQuery(){
  const c=plannedCentre||map.getCenter(),r=12000,a='(around:'+r+','+c.lat.toFixed(6)+','+c.lng.toFixed(6)+')';
