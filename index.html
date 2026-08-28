@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1d6f8f">
-<title>UK Canal Navigator V4.4</title>
+<title>UK Canal Navigator V4.5</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
@@ -30,7 +30,9 @@ aside{background:#fff;border-left:1px solid var(--line);overflow:auto;padding:12
 select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border-radius:8px;background:#fff;font:inherit}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .field{display:grid;gap:4px;font-size:13px;margin-top:8px}.poi-count{font-weight:700}.small{font-size:11px;color:var(--muted)}
 #detailPanel{display:none}#detailPanel.active{display:block}#defaultPanel.hidden{display:none}.detail-back{border:0;background:none;color:var(--brand);padding:0;cursor:pointer;font:inherit}
-.lock-icon{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:16px;line-height:1;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.38)}.lock-normal{background:#111;color:#fff}.lock-closed{background:#d7263d;color:#fff}.lock-restricted{background:#f2b705;color:#111}.lock-icon{font-family:system-ui,-apple-system,Segoe UI,sans-serif}.debugbox{font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word;background:#12181d;color:#d9edf5;border-radius:9px;padding:9px;max-height:220px;overflow:auto;margin-top:8px}.poi-emoji{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:17px;line-height:1;background:#fff;border:2px solid var(--poi-colour,#333);box-shadow:0 1px 5px rgba(0,0,0,.38)}
+.lock-icon{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:16px;line-height:1;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.38)}.lock-normal{background:#111;color:#fff}.lock-closed{background:#d7263d;color:#fff}.lock-restricted{background:#f2b705;color:#111}.lock-icon{font-family:system-ui,-apple-system,Segoe UI,sans-serif;position:relative}
+.lock-time-badge{position:absolute;left:50%;top:23px;transform:translateX(-50%);background:#111;color:#fff;border:1px solid #fff;border-radius:6px;padding:2px 4px;font-size:9px;font-weight:800;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.winding-icon{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#fff;border:2px solid #4c78a8;box-shadow:0 1px 5px rgba(0,0,0,.35);font-size:18px}.debugbox{font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word;background:#12181d;color:#d9edf5;border-radius:9px;padding:9px;max-height:220px;overflow:auto;margin-top:8px}.poi-emoji{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:17px;line-height:1;background:#fff;border:2px solid var(--poi-colour,#333);box-shadow:0 1px 5px rgba(0,0,0,.38)}
 .poi-key .emoji{width:28px;height:28px;display:inline-grid;place-items:center;border-radius:50%;background:#fff;border:2px solid #d9dee3;font-style:normal;font-size:16px;flex:0 0 28px}
 .poi-key button{display:inline-flex;align-items:center;gap:7px;border:1px solid #d9dee3;border-radius:999px;padding:6px 9px;background:#fff;font:inherit;font-size:12px;font-weight:700;min-height:40px}
 .poi-key button.off{opacity:.42;filter:grayscale(.75);text-decoration:line-through}
@@ -49,7 +51,7 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 <body>
 <div id="app">
 <header>
- <div><h1>UK Canal Navigator V4.4</h1><div class="sub">CRT GIS • GPS • independent POI layers • itinerary planner • restriction-aware routing • marine services</div></div>
+ <div><h1>UK Canal Navigator V4.5</h1><div class="sub">CRT GIS • GPS • lock restriction times • winding holes • rich POIs • itinerary planner</div></div>
  <div class="status" id="loadStatus">Loading CRT GIS…</div>
 </header>
 
@@ -70,19 +72,23 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 <button type="button" class="lock-fixed"><em class="emoji">❓</em> Restricted</button>
 <button type="button" class="lock-fixed"><em class="emoji">❌</em> Closed</button>
 <button type="button" data-poi-toggle="marinaToggle" aria-pressed="true"><em class="emoji">⚓</em> Marina</button>
+<button type="button" data-poi-toggle="windingToggle" aria-pressed="true"><em class="emoji">↩️</em> Winding hole</button>
 <button type="button" data-poi-toggle="waterToggle" aria-pressed="true"><em class="emoji">💧</em> Water</button>
 <button type="button" data-poi-toggle="toiletToggle" aria-pressed="true"><em class="emoji">🚽</em> Toilets</button>
 <button type="button" data-poi-toggle="showerToggle" aria-pressed="true"><em class="emoji">🚿</em> Showers</button>
 <button type="button" data-poi-toggle="pumpoutToggle" aria-pressed="true"><em class="emoji">💩</em> Pump-out</button>
 <button type="button" data-poi-toggle="refuseToggle" aria-pressed="true"><em class="emoji">🗑️</em> Refuse</button>
 <button type="button" data-poi-toggle="fuelToggle" aria-pressed="true"><em class="emoji">⛽</em> Fuel</button>
-<button type="button" data-poi-toggle="pubToggle" aria-pressed="true"><em class="emoji">🍺</em> Pubs/food</button>
+<button type="button" data-poi-toggle="pubToggle" aria-pressed="true"><em class="emoji">🍺</em> Pub</button>
+<button type="button" data-poi-toggle="restaurantToggle" aria-pressed="true"><em class="emoji">🍽️</em> Restaurant</button>
+<button type="button" data-poi-toggle="cafeToggle" aria-pressed="true"><em class="emoji">☕</em> Café</button>
 <button type="button" data-poi-toggle="laundryToggle" aria-pressed="true"><em class="emoji">🧺</em> Laundry</button>
 <button type="button" data-poi-toggle="shopsToggle" aria-pressed="true"><em class="emoji">🛒</em> Shops</button>
 <button type="button" data-poi-toggle="attractionsToggle" aria-pressed="false" class="off"><em class="emoji">🎡</em> Attractions</button>
 </div>
 <div style="display:none" aria-hidden="true">
 <input id="marinaToggle" type="checkbox" checked>
+<input id="windingToggle" type="checkbox" checked>
 <input id="waterToggle" type="checkbox" checked>
 <input id="toiletToggle" type="checkbox" checked>
 <input id="showerToggle" type="checkbox" checked>
@@ -90,6 +96,8 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 <input id="refuseToggle" type="checkbox" checked>
 <input id="fuelToggle" type="checkbox" checked>
 <input id="pubToggle" type="checkbox" checked>
+<input id="restaurantToggle" type="checkbox" checked>
+<input id="cafeToggle" type="checkbox" checked>
 <input id="laundryToggle" type="checkbox" checked>
 <input id="shopsToggle" type="checkbox" checked>
 <input id="attractionsToggle" type="checkbox">
@@ -278,7 +286,9 @@ document.getElementById('locateBtn').onclick=()=>{
 /* POIs — V4.0 stable renderer, navigation first + physical-lock dedupe */
 const navPoiLayer=L.layerGroup().addTo(map);
 const amenityLayers={
- food:L.layerGroup().addTo(map),
+ pubs:L.layerGroup().addTo(map),
+ restaurants:L.layerGroup().addTo(map),
+ cafes:L.layerGroup().addTo(map),
  shops:L.layerGroup().addTo(map),
  laundry:L.layerGroup().addTo(map),
  attractions:L.layerGroup().addTo(map)
@@ -300,6 +310,7 @@ function around(){
 function navQuery(){
  const a=around(),q=[];
  q.push('node[waterway=lock_gate]'+a+';','nwr[lock=yes]'+a+';','nwr[waterway=lock]'+a+';');
+ if(on('windingToggle'))q.push('node[waterway=turning_point]'+a+';');
  if(on('marinaToggle'))q.push('nwr[leisure=marina]'+a+';','nwr[waterway=boatyard]'+a+';');
  if(on('waterToggle'))q.push('nwr[amenity=drinking_water]'+a+';');
  if(on('toiletToggle'))q.push('nwr[amenity=toilets]'+a+';');
@@ -311,7 +322,9 @@ function navQuery(){
 }
 function amenityGroups(){
  const z=map.getZoom(),g=[];
- if(z>=10&&on('pubToggle'))g.push('food');
+ if(z>=10&&on('pubToggle'))g.push('pubs');
+ if(z>=10&&on('restaurantToggle'))g.push('restaurants');
+ if(z>=10&&on('cafeToggle'))g.push('cafes');
  if(z>=10&&on('shopsToggle'))g.push('shops');
  if(z>=11&&on('laundryToggle'))g.push('laundry');
  if(z>=12&&on('attractionsToggle'))g.push('attractions');
@@ -319,12 +332,14 @@ function amenityGroups(){
 }
 function amenityQuery(group){
  const a=around(),q=[];
- if(group==='food')q.push('nwr[amenity~"pub|restaurant|cafe"]'+a+';');
+ if(group==='pubs')q.push('nwr[amenity=pub]'+a+';');
+ if(group==='restaurants')q.push('nwr[amenity=restaurant]'+a+';');
+ if(group==='cafes')q.push('nwr[amenity=cafe]'+a+';');
  if(group==='shops')q.push('nwr[shop~"convenience|supermarket|newsagent"]'+a+';');
  if(group==='laundry')q.push('nwr[shop=laundry]'+a+';','nwr[amenity=laundry]'+a+';');
  if(group==='attractions')q.push('nwr[tourism~"attraction|museum|viewpoint"]'+a+';');
  if(!q.length)return null;
- const cap=group==='food'?260:group==='shops'?220:group==='laundry'?100:180;
+ const cap=group==='pubs'?180:group==='restaurants'?180:group==='cafes'?140:group==='shops'?220:group==='laundry'?100:180;
  return '[out:json][timeout:10];('+q.join('')+');out center tags '+cap+';';
 }
 function debugLog(m){const e=document.getElementById('poiDebug');if(e)e.textContent='['+new Date().toLocaleTimeString()+'] '+m+'\n'+e.textContent}
@@ -345,6 +360,7 @@ async function callOverpass(q,label){
 }
 function classify(t){
  if(t.waterway==='lock'||t.waterway==='lock_gate'||t.lock==='yes')return ['#111111','Lock'];
+ if(t.waterway==='turning_point')return ['#4c78a8','Winding hole'];
  if(t.leisure==='marina'||t.waterway==='boatyard')return ['#0077b6','Marina / boatyard'];
  if(t.shop==='laundry'||t.amenity==='laundry')return ['#7b2cbf','Laundry'];
  if(['pub','restaurant','cafe'].includes(t.amenity))return ['#e85d04',t.amenity];
@@ -354,6 +370,7 @@ function classify(t){
 }
 
 function poiEmoji(t,type){
+ if(t.waterway==='turning_point')return ['↩️','#4c78a8'];
  if(t.leisure==='marina'||t.waterway==='boatyard')return ['⚓','#0077b6'];
  if(t.amenity==='toilets')return ['🚽','#00a6a6'];
  if(t.amenity==='shower'||t.shower==='yes')return ['🚿','#00a6a6'];
@@ -423,6 +440,24 @@ function nearestWaterwayStatus(lat,lon){
  // At normal cruising zoom this is intentionally generous enough to catch a lock centred on its chamber.
  return best.px<=35?best:{px:best.px,status:null,name:null};
 }
+function normaliseLength(raw){
+ if(!raw)return null;
+ const s=String(raw).trim();
+ const m=s.match(/([\d.]+)\s*(m|metre|metres|meter|meters)$/i);
+ if(m){const metres=Number(m[1]),feet=metres*3.28084;return metres.toFixed(metres%1?1:0)+' m ('+feet.toFixed(0)+' ft)';}
+ const ft=s.match(/([\d.]+)\s*(ft|feet|')/i);
+ if(ft){const feet=Number(ft[1]),metres=feet/3.28084;return feet.toFixed(feet%1?1:0)+' ft ('+metres.toFixed(1)+' m)';}
+ return s;
+}
+const lockRestrictionWindows=[
+ {match:'Oxford',open:'10:00',close:'14:00'},
+ {match:'Macclesfield',open:'09:00',close:'13:00'},
+ {match:'Grand Union',open:'09:00',close:'14:00'}
+];
+function restrictionWindowForSource(source){
+ if(!source)return null;
+ return lockRestrictionWindows.find(r=>source.toLowerCase().includes(r.match.toLowerCase()))||null;
+}
 function finalLockState(t,lat,lon){
  const own=explicitLockState(t);
  if(own==='closed')return {state:'closed',source:'lock'};
@@ -434,12 +469,12 @@ function finalLockState(t,lat,lon){
 }
 function richDetail(t,lat,lon,name){
  const cells=[],addr=[t['addr:housenumber'],t['addr:street'],t['addr:city'],t['addr:postcode']].filter(Boolean).join(', '),phone=t.phone||t['contact:phone'],web=t.website||t['contact:website'],email=t.email||t['contact:email'];
- if(addr)cells.push(['Address',addr]);if(t.opening_hours)cells.push(['Opening hours',t.opening_hours]);if(phone)cells.push(['Phone',phone]);if(web)cells.push(['Website',web]);if(email)cells.push(['Email',email]);if(t.cuisine)cells.push(['Cuisine',t.cuisine.replaceAll(';',', ')]);if(t.operator)cells.push(['Operator',t.operator]);if(t.description)cells.push(['Description',t.description]);
+ if(addr)cells.push(['Address',addr]);if(t.opening_hours)cells.push(['Opening hours',t.opening_hours]);if(phone)cells.push(['Phone',phone]);if(web)cells.push(['Website',web]);if(email)cells.push(['Email',email]);if(t.cuisine)cells.push(['Cuisine',t.cuisine.replaceAll(';',', ')]);if(t.takeaway)cells.push(['Takeaway',t.takeaway]);if(t.delivery)cells.push(['Delivery',t.delivery]);if(t.outdoor_seating)cells.push(['Outdoor seating',t.outdoor_seating]);if(t.wheelchair)cells.push(['Wheelchair access',t.wheelchair]);if(t.internet_access)cells.push(['Wi‑Fi',t.internet_access]);if(t.operator)cells.push(['Operator',t.operator]);if(t.description)cells.push(['Description',t.description]);
  let html=cells.length?'<div class="info-grid">'+cells.map(x=>'<div class="info-cell"><b>'+esc(x[0])+'</b>'+esc(x[1])+'</div>').join('')+'</div>':'OpenStreetMap point of interest.';
  const yes=v=>['yes','true','1','designated'].includes(String(v||'').toLowerCase()),am=[];
  [['🚻','Toilets',yes(t.toilets)||t.amenity==='toilets'],['🚿','Showers',yes(t.shower)||yes(t.showers)],['🧻','Pump-out',yes(t.sanitary_dump_station)||t.amenity==='sanitary_dump_station'],['⛽','Fuel',yes(t.fuel)||t.amenity==='fuel'],['💧','Water',t.amenity==='drinking_water'||yes(t.drinking_water)||yes(t.water_point)],['🗑️','Refuse',t.amenity==='waste_disposal'||yes(t.waste_disposal)],['🛒','Shop',!!t.shop],['📰','Newsagent',t.shop==='newsagent'],['🔧','Repairs',yes(t.repair)||t.waterway==='boatyard'||t.craft==='boatbuilder'],['⚡','Electricity',yes(t.electricity)||yes(t.power_supply)]].filter(x=>x[2]).forEach(x=>am.push('<span class="amenity">'+x[0]+' '+x[1]+'</span>'));
  if(am.length)html+='<div class="amenities">'+am.join('')+'</div>';
- const links=[];if(web)links.push('<a class="linkbtn" target="_blank" rel="noopener" href="'+esc(web)+'">Website</a>');if(phone)links.push('<a class="linkbtn" href="tel:'+esc(phone)+'">Call</a>');links.push('<a class="linkbtn" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent((name||'')+' '+lat+','+lon)+'">Google Maps</a>');html+='<div class="linkrow">'+links.join('')+'</div>';
+ const links=[];if(web)links.push('<a class="linkbtn" target="_blank" rel="noopener" href="'+esc(web)+'">Website</a>');if(phone)links.push('<a class="linkbtn" href="tel:'+esc(phone)+'">Call</a>');links.push('<a class="linkbtn" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent((name||'')+' '+lat+','+lon)+'">Open in Google Maps</a>');html+='<div class="linkrow">'+links.join('')+'</div>';
  return html;
 }
 function elementPoint(e){
@@ -496,8 +531,10 @@ function renderNav(j){
    const resolved=finalLockState(t,lat,lon),st=resolved.state;
    const cls=st==='closed'?'lock-closed':st==='restricted'?'lock-restricted':'lock-normal';
    const sym=st==='closed'?'✕':st==='restricted'?'?':'';
-   const icon=L.divIcon({className:'',html:'<div class="lock-icon '+cls+'">'+sym+'</div>',iconSize:[22,22],iconAnchor:[11,11]});
-   const source=resolved.source?'<div class="warn" style="margin-top:8px"><strong>Navigation status:</strong> '+esc(st)+' — matched from '+esc(resolved.source)+'.</div>':'';
+   const windowInfo=st==='restricted'?restrictionWindowForSource(resolved.source):null;
+   const badge=windowInfo?'<span class="lock-time-badge">'+windowInfo.open+'–'+windowInfo.close+'</span>':'';
+   const icon=L.divIcon({className:'',html:'<div class="lock-icon '+cls+'">'+sym+badge+'</div>',iconSize:[34,42],iconAnchor:[17,11]});
+   const source=resolved.source?'<div class="warn" style="margin-top:8px"><strong>Navigation status:</strong> '+esc(st)+' — matched from '+esc(resolved.source)+'.'+(windowInfo?'<br><strong>Restriction hours:</strong> '+windowInfo.open+'–'+windowInfo.close+'.':'<br><strong>Restriction hours:</strong> not supplied in the current snapshot.')+'</div>':'';
    L.marker([lat,lon],{icon,zIndexOffset:700})
     .bindTooltip(name+(st!=='normal'?' • '+st:''),{sticky:true})
     .on('click',()=>showDetail(name,'Lock',richDetail(t,lat,lon,name)+source))
@@ -508,7 +545,14 @@ function renderNav(j){
    if(lockElements.has(e))continue;
    const pt=elementPoint(e);if(!pt)continue;
    const t=e.tags||{},[color,type]=classify(t),name=t.name||type;
-   addEmojiPoi(navPoiLayer,pt.lat,pt.lon,t,type,name);
+   if(type==='Winding hole'){
+     const max=normaliseLength(t.maxlength||t['maxlength:boat']||t['boat:maxlength']);
+     const icon=L.divIcon({className:'',html:'<div class="winding-icon">↩️</div>',iconSize:[30,30],iconAnchor:[15,15]});
+     L.marker([pt.lat,pt.lon],{icon,zIndexOffset:500}).bindTooltip(name+(max?' • max '+max:' • length unknown'),{sticky:true})
+      .on('click',()=>showDetail(name,type,richDetail(t,pt.lat,pt.lon,name)+'<div class="card"><strong>Turning length</strong><div class="meta">'+(max?'Maximum boat length: '+esc(max):'No maximum boat length is recorded for this winding hole.')+'</div></div>')).addTo(navPoiLayer);
+   }else{
+     addEmojiPoi(navPoiLayer,pt.lat,pt.lon,t,type,name);
+   }
    n++;
  }
  return n;
@@ -525,7 +569,7 @@ function renderAmenities(group,j){
  return n;
 }
 function totalPois(){return navPoiLayer.getLayers().length+Object.values(amenityLayers).reduce((s,l)=>s+l.getLayers().length,0)}
-function cacheKey(kind){const c=map.getCenter(),z=map.getZoom(),p=z<=10?1:z<=12?2:3;return kind+':'+z+':'+c.lat.toFixed(p)+':'+c.lng.toFixed(p)+':'+['marinaToggle','waterToggle','toiletToggle','showerToggle','pumpoutToggle','refuseToggle','fuelToggle','pubToggle','laundryToggle','shopsToggle','attractionsToggle'].map(id=>on(id)?1:0).join('')}
+function cacheKey(kind){const c=map.getCenter(),z=map.getZoom(),p=z<=10?1:z<=12?2:3;return kind+':'+z+':'+c.lat.toFixed(p)+':'+c.lng.toFixed(p)+':'+['marinaToggle','windingToggle','waterToggle','toiletToggle','showerToggle','pumpoutToggle','refuseToggle','fuelToggle','pubToggle','restaurantToggle','cafeToggle','laundryToggle','shopsToggle','attractionsToggle'].map(id=>on(id)?1:0).join('')}
 async function loadPois(force=false){
  if(map.getZoom()<9){document.getElementById('poiStatus').textContent='Zoom to level 9+ to load regional POIs.';return}
  if(poiBusy){pendingPoiLoad=true;return}
