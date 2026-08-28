@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1d6f8f">
-<title>UK Canal Navigator V4.3</title>
+<title>UK Canal Navigator V4.4</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
@@ -49,7 +49,7 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 <body>
 <div id="app">
 <header>
- <div><h1>UK Canal Navigator V4.3</h1><div class="sub">CRT GIS • GPS • selectable POIs • itinerary planner • restriction-aware routing • marine services</div></div>
+ <div><h1>UK Canal Navigator V4.4</h1><div class="sub">CRT GIS • GPS • independent POI layers • itinerary planner • restriction-aware routing • marine services</div></div>
  <div class="status" id="loadStatus">Loading CRT GIS…</div>
 </header>
 
@@ -70,21 +70,35 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 <button type="button" class="lock-fixed"><em class="emoji">❓</em> Restricted</button>
 <button type="button" class="lock-fixed"><em class="emoji">❌</em> Closed</button>
 <button type="button" data-poi-toggle="marinaToggle" aria-pressed="true"><em class="emoji">⚓</em> Marina</button>
-<button type="button" data-poi-toggle="servicesToggle" aria-pressed="true"><em class="emoji">💧</em> Water/services</button>
-<button type="button" data-poi-toggle="servicesToggle" aria-pressed="true"><em class="emoji">🚽</em> Toilets</button>
-<button type="button" data-poi-toggle="servicesToggle" aria-pressed="true"><em class="emoji">💩</em> Pump-out</button>
-<button type="button" data-poi-toggle="servicesToggle" aria-pressed="true"><em class="emoji">🗑️</em> Refuse</button>
-<button type="button" data-poi-toggle="servicesToggle" aria-pressed="true"><em class="emoji">⛽</em> Fuel</button>
+<button type="button" data-poi-toggle="waterToggle" aria-pressed="true"><em class="emoji">💧</em> Water</button>
+<button type="button" data-poi-toggle="toiletToggle" aria-pressed="true"><em class="emoji">🚽</em> Toilets</button>
+<button type="button" data-poi-toggle="showerToggle" aria-pressed="true"><em class="emoji">🚿</em> Showers</button>
+<button type="button" data-poi-toggle="pumpoutToggle" aria-pressed="true"><em class="emoji">💩</em> Pump-out</button>
+<button type="button" data-poi-toggle="refuseToggle" aria-pressed="true"><em class="emoji">🗑️</em> Refuse</button>
+<button type="button" data-poi-toggle="fuelToggle" aria-pressed="true"><em class="emoji">⛽</em> Fuel</button>
 <button type="button" data-poi-toggle="pubToggle" aria-pressed="true"><em class="emoji">🍺</em> Pubs/food</button>
 <button type="button" data-poi-toggle="laundryToggle" aria-pressed="true"><em class="emoji">🧺</em> Laundry</button>
 <button type="button" data-poi-toggle="shopsToggle" aria-pressed="true"><em class="emoji">🛒</em> Shops</button>
 <button type="button" data-poi-toggle="attractionsToggle" aria-pressed="false" class="off"><em class="emoji">🎡</em> Attractions</button>
 </div>
 <div style="display:none" aria-hidden="true">
-<input id="marinaToggle" type="checkbox" checked><input id="servicesToggle" type="checkbox" checked>
-<input id="pubToggle" type="checkbox" checked><input id="laundryToggle" type="checkbox" checked>
-<input id="shopsToggle" type="checkbox" checked><input id="attractionsToggle" type="checkbox">
+<input id="marinaToggle" type="checkbox" checked>
+<input id="waterToggle" type="checkbox" checked>
+<input id="toiletToggle" type="checkbox" checked>
+<input id="showerToggle" type="checkbox" checked>
+<input id="pumpoutToggle" type="checkbox" checked>
+<input id="refuseToggle" type="checkbox" checked>
+<input id="fuelToggle" type="checkbox" checked>
+<input id="pubToggle" type="checkbox" checked>
+<input id="laundryToggle" type="checkbox" checked>
+<input id="shopsToggle" type="checkbox" checked>
+<input id="attractionsToggle" type="checkbox">
 </div>
+<div class="card" style="margin-top:9px">
+ <div><span id="poiCount" class="poi-count">0</span> POIs visible</div>
+ <div id="poiStatus" class="small">POIs will load automatically around the map.</div>
+</div>
+<button class="btn secondary" id="loadPoisBtn">Refresh POIs</button>
 </div>
 
 <div class="section">
@@ -287,17 +301,12 @@ function navQuery(){
  const a=around(),q=[];
  q.push('node[waterway=lock_gate]'+a+';','nwr[lock=yes]'+a+';','nwr[waterway=lock]'+a+';');
  if(on('marinaToggle'))q.push('nwr[leisure=marina]'+a+';','nwr[waterway=boatyard]'+a+';');
- if(on('servicesToggle'))q.push(
- 'nwr[amenity=drinking_water]'+a+';',
- 'nwr[amenity=toilets]'+a+';',
- 'nwr[shower=yes]'+a+';',
- 'nwr[amenity=shower]'+a+';',
- 'nwr[amenity=waste_disposal]'+a+';',
- 'nwr[sanitary_dump_station=yes]'+a+';',
- 'nwr[amenity=sanitary_dump_station]'+a+';',
- 'nwr[fuel=yes]'+a+';',
- 'nwr[amenity=fuel]'+a+';'
-);
+ if(on('waterToggle'))q.push('nwr[amenity=drinking_water]'+a+';');
+ if(on('toiletToggle'))q.push('nwr[amenity=toilets]'+a+';');
+ if(on('showerToggle'))q.push('nwr[shower=yes]'+a+';','nwr[amenity=shower]'+a+';');
+ if(on('pumpoutToggle'))q.push('nwr[sanitary_dump_station=yes]'+a+';','nwr[amenity=sanitary_dump_station]'+a+';');
+ if(on('refuseToggle'))q.push('nwr[amenity=waste_disposal]'+a+';');
+ if(on('fuelToggle'))q.push('nwr[fuel=yes]'+a+';','nwr[amenity=fuel]'+a+';');
  return '[out:json][timeout:12];('+q.join('')+');out center tags 450;';
 }
 function amenityGroups(){
@@ -516,12 +525,12 @@ function renderAmenities(group,j){
  return n;
 }
 function totalPois(){return navPoiLayer.getLayers().length+Object.values(amenityLayers).reduce((s,l)=>s+l.getLayers().length,0)}
-function cacheKey(kind){const c=map.getCenter(),z=map.getZoom(),p=z<=10?1:z<=12?2:3;return kind+':'+z+':'+c.lat.toFixed(p)+':'+c.lng.toFixed(p)+':'+['marinaToggle','servicesToggle','pubToggle','laundryToggle','shopsToggle','attractionsToggle'].map(id=>on(id)?1:0).join('')}
+function cacheKey(kind){const c=map.getCenter(),z=map.getZoom(),p=z<=10?1:z<=12?2:3;return kind+':'+z+':'+c.lat.toFixed(p)+':'+c.lng.toFixed(p)+':'+['marinaToggle','waterToggle','toiletToggle','showerToggle','pumpoutToggle','refuseToggle','fuelToggle','pubToggle','laundryToggle','shopsToggle','attractionsToggle'].map(id=>on(id)?1:0).join('')}
 async function loadPois(force=false){
  if(map.getZoom()<9){document.getElementById('poiStatus').textContent='Zoom to level 9+ to load regional POIs.';return}
  if(poiBusy){pendingPoiLoad=true;return}
  poiBusy=true;pendingPoiLoad=false;
- const status=document.getElementById('poiStatus');
+ const status=document.getElementById('poiStatus')||{textContent:''};
  document.getElementById('mapMsg').textContent='Loading locks, marinas & services…';
  try{
    const navKey=cacheKey('nav'),navCached=poiCache.get(navKey);
@@ -529,7 +538,7 @@ async function loadPois(force=false){
    if(!force&&navCached&&Date.now()-navCached.time<90000){navData=navCached.data;debugLog('nav cache hit')}
    else{navData=await callOverpass(navQuery(),'nav');poiCache.set(navKey,{time:Date.now(),data:navData})}
    const navCount=renderNav(navData);
-   document.getElementById('poiCount').textContent=totalPois();
+   (document.getElementById('poiCount')||{textContent:''}).textContent=totalPois();
    status.textContent=navCount+' navigation POIs loaded; loading local amenities…';
    document.getElementById('mapMsg').textContent=navCount+' navigation POIs loaded.';
 
@@ -547,7 +556,7 @@ async function loadPois(force=false){
        else{data=await callOverpass(q,group);poiCache.set(key,{time:Date.now(),data})}
        const count=renderAmenities(group,data);
        results.push(group+' '+count);
-       document.getElementById('poiCount').textContent=totalPois();
+       (document.getElementById('poiCount')||{textContent:''}).textContent=totalPois();
        status.textContent=totalPois()+' POIs loaded • '+results.join(' • ');
      }catch(e){
        failures.push(group);
@@ -559,7 +568,7 @@ async function loadPois(force=false){
      }
    }
    const total=totalPois();
-   document.getElementById('poiCount').textContent=total;
+   (document.getElementById('poiCount')||{textContent:''}).textContent=total;
    status.textContent=total+' POIs loaded'+(results.length?' • '+results.join(' • '):'')+(failures.length?' • failed: '+failures.join(', '):'');
    document.getElementById('mapMsg').textContent=failures.length
      ? total+' POIs visible; some categories could not refresh.'
@@ -591,7 +600,7 @@ if(diag)diag.onclick=async()=>{
      debugLog('diagnostic rendered '+m+' '+group+' markers');
    }
   }
-  document.getElementById('poiCount').textContent=totalPois();
+  (document.getElementById('poiCount')||{textContent:''}).textContent=totalPois();
   document.getElementById('poiStatus').textContent=totalPois()+' POIs rendered by diagnostic.';
  }catch(e){debugLog('diagnostic failed '+e.message)}
 };

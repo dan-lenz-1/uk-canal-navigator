@@ -4,5 +4,6 @@
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f4f6f7",
-  "theme_color": "#145d73"
+  "theme_color": "#145d73",
+  "description": "UK canal navigator with independent selectable POI icons, GPS, CRT GIS, itinerary planning and marine services."
 }
