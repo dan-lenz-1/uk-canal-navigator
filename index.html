@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1d6f8f">
-<title>UK Canal Navigator V4.2</title>
+<title>UK Canal Navigator V4.3</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
@@ -32,6 +32,14 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 #detailPanel{display:none}#detailPanel.active{display:block}#defaultPanel.hidden{display:none}.detail-back{border:0;background:none;color:var(--brand);padding:0;cursor:pointer;font:inherit}
 .lock-icon{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:16px;line-height:1;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.38)}.lock-normal{background:#111;color:#fff}.lock-closed{background:#d7263d;color:#fff}.lock-restricted{background:#f2b705;color:#111}.lock-icon{font-family:system-ui,-apple-system,Segoe UI,sans-serif}.debugbox{font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word;background:#12181d;color:#d9edf5;border-radius:9px;padding:9px;max-height:220px;overflow:auto;margin-top:8px}.poi-emoji{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:17px;line-height:1;background:#fff;border:2px solid var(--poi-colour,#333);box-shadow:0 1px 5px rgba(0,0,0,.38)}
 .poi-key .emoji{width:28px;height:28px;display:inline-grid;place-items:center;border-radius:50%;background:#fff;border:2px solid #d9dee3;font-style:normal;font-size:16px;flex:0 0 28px}
+.poi-key button{display:inline-flex;align-items:center;gap:7px;border:1px solid #d9dee3;border-radius:999px;padding:6px 9px;background:#fff;font:inherit;font-size:12px;font-weight:700;min-height:40px}
+.poi-key button.off{opacity:.42;filter:grayscale(.75);text-decoration:line-through}
+.poi-key button.lock-fixed{cursor:default;background:#f7f7f7}
+.itinerary-day{border:1px solid #d9dee3;border-radius:10px;padding:10px;margin:8px 0;background:#fff}
+.itinerary-day .daytitle{font-weight:800}.itinerary-day .stop{font-size:14px;margin-top:4px}.itinerary-day .ideas{font-size:12px;color:#64717a;margin-top:5px}
+.restriction-note{border-left:5px solid #f2b705;background:#fff8e5;border-radius:8px;padding:8px 9px;margin-top:7px;font-size:12px}
+.print-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.print-actions button{width:auto}
+@media print{body>*{display:none!important}#printSheet{display:block!important;position:absolute;inset:0;background:#fff;color:#111;padding:20px}}
 .gps-pulse{width:18px;height:18px;border-radius:50%;background:#1976d2;border:4px solid white;box-shadow:0 0 0 2px #1976d2,0 1px 5px rgba(0,0,0,.35)}
 .map-msg{position:absolute;z-index:900;left:50%;top:10px;transform:translateX(-50%);background:rgba(255,255,255,.95);border:1px solid #d6dde1;border-radius:9px;padding:7px 10px;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.15);pointer-events:none;max-width:82%;text-align:center}
 .env-banner{display:none;margin-bottom:10px}.env-banner.show{display:block}
@@ -41,7 +49,7 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 <body>
 <div id="app">
 <header>
- <div><h1>UK Canal Navigator V4.2</h1><div class="sub">CRT GIS • fast GPS • resilient emoji POIs • deduplicated locks • route planning • marine services</div></div>
+ <div><h1>UK Canal Navigator V4.3</h1><div class="sub">CRT GIS • GPS • selectable POIs • itinerary planner • restriction-aware routing • marine services</div></div>
  <div class="status" id="loadStatus">Loading CRT GIS…</div>
 </header>
 
@@ -57,24 +65,26 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 
 <div class="section">
  <strong>POI map key</strong>
- <div class="poi-key">
-  <span><em class="emoji">⚫</em> Lock</span>
-  <span><em class="emoji">❓</em> Restricted lock</span>
-  <span><em class="emoji">❌</em> Closed lock</span>
-  <span><em class="emoji">⚓</em> Marina / boatyard</span>
-  <span><em class="emoji">🚽</em> Toilets</span>
-  <span><em class="emoji">🚿</em> Showers</span>
-  <span><em class="emoji">💩</em> Pump-out / Elsan</span>
-  <span><em class="emoji">🗑️</em> Refuse / waste</span>
-  <span><em class="emoji">💧</em> Drinking water</span>
-  <span><em class="emoji">⛽</em> Fuel</span>
-  <span><em class="emoji">🍺</em> Pub</span>
-  <span><em class="emoji">🍽️</em> Restaurant</span>
-  <span><em class="emoji">☕</em> Café</span>
-  <span><em class="emoji">🧺</em> Laundrette</span>
-  <span><em class="emoji">🛒</em> Shop / supermarket</span>
-  <span><em class="emoji">🎡</em> Attraction</span>
- </div>
+ <div class="poi-key" id="poiKey">
+<button type="button" class="lock-fixed"><em class="emoji">⚫</em> Lock</button>
+<button type="button" class="lock-fixed"><em class="emoji">❓</em> Restricted</button>
+<button type="button" class="lock-fixed"><em class="emoji">❌</em> Closed</button>
+<button type="button" data-poi-toggle="marinaToggle" aria-pressed="true"><em class="emoji">⚓</em> Marina</button>
+<button type="button" data-poi-toggle="servicesToggle" aria-pressed="true"><em class="emoji">💧</em> Water/services</button>
+<button type="button" data-poi-toggle="servicesToggle" aria-pressed="true"><em class="emoji">🚽</em> Toilets</button>
+<button type="button" data-poi-toggle="servicesToggle" aria-pressed="true"><em class="emoji">💩</em> Pump-out</button>
+<button type="button" data-poi-toggle="servicesToggle" aria-pressed="true"><em class="emoji">🗑️</em> Refuse</button>
+<button type="button" data-poi-toggle="servicesToggle" aria-pressed="true"><em class="emoji">⛽</em> Fuel</button>
+<button type="button" data-poi-toggle="pubToggle" aria-pressed="true"><em class="emoji">🍺</em> Pubs/food</button>
+<button type="button" data-poi-toggle="laundryToggle" aria-pressed="true"><em class="emoji">🧺</em> Laundry</button>
+<button type="button" data-poi-toggle="shopsToggle" aria-pressed="true"><em class="emoji">🛒</em> Shops</button>
+<button type="button" data-poi-toggle="attractionsToggle" aria-pressed="false" class="off"><em class="emoji">🎡</em> Attractions</button>
+</div>
+<div style="display:none" aria-hidden="true">
+<input id="marinaToggle" type="checkbox" checked><input id="servicesToggle" type="checkbox" checked>
+<input id="pubToggle" type="checkbox" checked><input id="laundryToggle" type="checkbox" checked>
+<input id="shopsToggle" type="checkbox" checked><input id="attractionsToggle" type="checkbox">
+</div>
 </div>
 
 <div class="section">
@@ -97,31 +107,16 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 </div>
 
 <div class="section">
- <strong>Nearby canal information</strong>
- <div class="meta">Automatically loaded around the map centre. Tap any marker for details.</div>
- <div class="control-list">
-  <label class="control-row"><input type="checkbox" checked disabled><span><b>Locks</b> — always displayed in black</span></label>
-  <label class="control-row"><input id="marinaToggle" type="checkbox" checked><span>Marinas & boatyards</span></label>
-  <label class="control-row"><input id="servicesToggle" type="checkbox" checked><span>Water, waste, pump-out & fuel</span></label>
-  <label class="control-row"><input id="pubToggle" type="checkbox" checked><span>Pubs, restaurants & cafés</span></label>
-  <label class="control-row"><input id="laundryToggle" type="checkbox" checked><span>Laundrettes</span></label>
-  <label class="control-row"><input id="shopsToggle" type="checkbox" checked><span>Shops & supermarkets</span></label>
-  <label class="control-row"><input id="attractionsToggle" type="checkbox"><span>Visitor attractions</span></label>
- </div>
- <div class="card"><div>Loaded nearby: <span id="poiCount" class="poi-count">0</span></div><div id="poiStatus" class="small">Waiting for a local zoom level.</div></div>
- <button class="btn secondary" id="loadPoisBtn">Refresh nearby POIs</button>
-  <details style="margin-top:10px"><summary style="font-weight:700;cursor:pointer">POI diagnostics</summary><button class="btn secondary" id="diagBtn" type="button">Run POI diagnostic</button><div id="poiDebug" class="debugbox">Diagnostics ready.</div></details>
-</div>
-
-<div class="section">
- <strong>Jump to test location</strong>
+ <strong>Jump to location</strong>
  <label class="field">Location<select id="testArea">
-  <option value="52.289,-1.204,14">Braunston</option>
-  <option value="52.486,-1.890,14">Birmingham</option>
-  <option value="53.258,-2.127,14">Macclesfield</option>
-  <option value="53.800,-1.549,14">Leeds</option>
-  <option value="52.902,-2.147,14">Stone</option>
- </select></label>
+<option value="52.289,-1.204,14">Braunston Marina</option><option value="52.846,-1.560,14">Mercia Marina</option>
+<option value="53.276,-2.529,14">Anderton Marina</option><option value="52.874,-1.296,14">Sawley Marina</option>
+<option value="52.241,-1.303,14">Wigrams Turn Marina</option><option value="52.652,-1.184,14">Pillings Lock Marina</option>
+<option value="52.537,-1.322,14">Bosworth Marina</option><option value="52.126,-1.416,14">Fenny Compton Marina</option>
+<option value="52.486,-1.890,14">Birmingham</option><option value="53.258,-2.127,14">Macclesfield</option>
+<option value="53.800,-1.549,14">Leeds</option><option value="52.902,-2.147,14">Stone</option>
+<option value="51.752,-1.258,14">Oxford</option><option value="51.454,-2.587,14">Bristol</option>
+</select></label>
  <button class="btn secondary" id="jumpBtn">Go there</button>
 </div>
 
@@ -139,26 +134,31 @@ select,input[type=number]{width:100%;padding:9px;border:1px solid #cfd6dc;border
 </div>
 
 <div id="routePane" style="display:none">
- <div class="section">
-  <strong>Route planner</strong>
-  <label class="field">Base marina<select id="baseMarina">
-   <option value="52.289,-1.204">Braunston Marina</option>
-   <option value="52.846,-1.560">Mercia Marina</option>
-   <option value="53.276,-2.529">Anderton Marina</option>
-   <option value="52.874,-1.296">Sawley Marina</option>
-   <option value="52.241,-1.303">Wigrams Turn Marina</option>
-  </select></label>
-  <div class="grid2">
-   <label class="field">Trip length (days)<input id="days" type="number" min="1" max="28" value="7"></label>
-   <label class="field">Hours/day<input id="hours" type="number" min="2" max="12" step=".5" value="6"></label>
-  </div>
-  <label class="field">Trip style<select id="tripStyle"><option>Out and back</option><option>Ring</option><option>One way</option></select></label>
-  <button class="btn" id="planBtn">Build cruising plan</button>
-  <div id="routeResult"></div>
-  <button class="btn secondary" id="routeTradesBtn">Find marine services for this trip</button>
- </div>
-</div>
-
+<div class="section">
+<strong>Route & itinerary planner</strong><div class="meta">Proposed daily schedule, mooring ideas, destinations and restriction-aware timings.</div>
+<label class="field">Boat / trip mode<select id="boatMode"><option value="private">Private / owned boat</option><option value="hire">Hire boat / return to base</option></select></label>
+<label class="field">Start date<input id="startDate" type="date"></label>
+<div class="grid2">
+<label class="field">Start / base<select id="baseMarina">
+<option value="Braunston Marina|52.289|-1.204">Braunston Marina</option><option value="Mercia Marina|52.846|-1.560">Mercia Marina</option>
+<option value="Anderton Marina|53.276|-2.529">Anderton Marina</option><option value="Sawley Marina|52.874|-1.296">Sawley Marina</option>
+<option value="Wigrams Turn Marina|52.241|-1.303">Wigrams Turn Marina</option><option value="Pillings Lock Marina|52.652|-1.184">Pillings Lock Marina</option>
+<option value="Bosworth Marina|52.537|-1.322">Bosworth Marina</option><option value="Fenny Compton Marina|52.126|-1.416">Fenny Compton Marina</option>
+<option value="Oxford|51.752|-1.258">Oxford</option><option value="Birmingham|52.486|-1.890">Birmingham</option>
+</select></label>
+<label class="field" id="endField">End destination<select id="endMarina">
+<option value="Oxford|51.752|-1.258">Oxford</option><option value="Birmingham|52.486|-1.890">Birmingham</option>
+<option value="Braunston Marina|52.289|-1.204">Braunston Marina</option><option value="Mercia Marina|52.846|-1.560">Mercia Marina</option>
+<option value="Anderton Marina|53.276|-2.529">Anderton Marina</option><option value="Sawley Marina|52.874|-1.296">Sawley Marina</option>
+<option value="Wigrams Turn Marina|52.241|-1.303">Wigrams Turn Marina</option><option value="Leeds|53.800|-1.549">Leeds</option><option value="Stone|52.902|-2.147">Stone</option>
+</select></label></div>
+<div class="grid3"><label class="field">Trip length (days)<input id="days" type="number" min="1" max="28" value="7"></label>
+<label class="field">Cruising hours/day<input id="hours" type="number" min="2" max="12" step=".5" value="6"></label>
+<label class="field">Preferred start time<input id="dayStart" type="time" value="09:00"></label></div>
+<label class="field" id="tripStyleField">Trip style<select id="tripStyle"><option>Out and back</option><option>Ring</option><option>One way</option></select></label>
+<button class="btn" id="planBtn">Build proposed itinerary</button><div id="routeResult"></div>
+<div class="print-actions"><button class="btn secondary smallbtn" id="printItineraryBtn" disabled>Export / Save as PDF</button><button class="btn secondary smallbtn" id="routeTradesBtn">Find marine services for this trip</button></div>
+</div></div>
 <div id="tradesPane" style="display:none">
  <div class="section">
   <strong>Marine trades & repair services</strong>
@@ -230,6 +230,13 @@ function showDetail(name,type,html){
  d.classList.add('active');main.classList.add('hidden');
  document.getElementById('backDetail').onclick=()=>{d.classList.remove('active');main.classList.remove('hidden')};
 }
+
+/* V4.3 selectable POI key */
+document.querySelectorAll('#poiKey [data-poi-toggle]').forEach(btn=>btn.addEventListener('click',()=>{
+const id=btn.dataset.poiToggle,box=document.getElementById(id);if(!box)return;box.checked=!box.checked;
+document.querySelectorAll('#poiKey [data-poi-toggle="'+id+'"]').forEach(b=>{b.classList.toggle('off',!box.checked);b.setAttribute('aria-pressed',String(box.checked));});
+loadPois(true);
+}));
 
 /* GPS */
 let watch=null,gpsMarker=null,accuracy=null,first=true;
@@ -569,7 +576,7 @@ async function loadPois(force=false){
 function schedule(){clearTimeout(timer);timer=setTimeout(()=>loadPois(false),160)}
 map.on('moveend zoomend',schedule);
 document.getElementById('loadPoisBtn').onclick=()=>loadPois(true);
-['marinaToggle','servicesToggle','pubToggle','laundryToggle','shopsToggle','attractionsToggle'].forEach(id=>{const e=document.getElementById(id);if(e)e.onchange=()=>loadPois(true)});
+
 document.getElementById('jumpBtn').onclick=()=>{const [a,b,z]=document.getElementById('testArea').value.split(',').map(Number);map.setView([a,b],z);setTimeout(()=>loadPois(true),180)};
 const diag=document.getElementById('diagBtn');
 if(diag)diag.onclick=async()=>{
@@ -606,19 +613,28 @@ document.getElementById('showExplore').onclick=()=>showPanel('explore');
 document.getElementById('showRoute').onclick=()=>showPanel('route');
 document.getElementById('showTrades').onclick=()=>showPanel('trades');
 
-let plannedCentre=null;
-document.getElementById('planBtn').onclick=()=>{
- const [lat,lon]=document.getElementById('baseMarina').value.split(',').map(Number);
- const d=Math.max(1,Math.min(28,Number(document.getElementById('days').value)||7));
- const h=Math.max(2,Math.min(12,Number(document.getElementById('hours').value)||6));
- const style=document.getElementById('tripStyle').value,total=d*h,lockH=Math.round(total*.24),usable=total-lockH;
- plannedCentre={lat,lon};map.setView([lat,lon],12);
- let rows='';for(let i=1;i<=d;i++)rows+='<div class="card"><strong>Day '+i+'</strong><div class="meta">'+h.toFixed(1)+' cruising hours • overnight stop calculated in exact graph-routing stage</div></div>';
- document.getElementById('routeResult').innerHTML='<div class="card"><strong>'+total+' total cruising hours</strong><div class="meta">Indicative '+Math.round(usable*1.75)+'–'+Math.round(usable*2.45)+' miles • ~'+lockH+' hours allowed for locks • '+escapeHtml(style)+'</div><div class="warn" style="margin-top:8px">This restores route planning, but exact canal routing, lock sequence and stoppage-aware overnight stops require the routable CRT graph next.</div></div>'+rows;
-};
-
+let plannedCentre=null,currentItinerary=null,routeOverlay=null;
+const locationIdeas={'Braunston Marina':['Braunston village','Canal-side pubs','Historic junction and marina'],'Oxford':['Oxford city centre','University colleges','Covered Market'],'Birmingham':['Gas Street Basin','Brindleyplace','Jewellery Quarter'],'Mercia Marina':['Mercia Boardwalk','Willington pubs','Trent & Mersey walks'],'Anderton Marina':['Anderton Boat Lift','Northwich','River Weaver'],'Sawley Marina':['Shardlow','Trent junction','Waterside pubs'],'Wigrams Turn Marina':['Napton','Braunston','Warwickshire countryside'],'Leeds':['Leeds waterfront','Royal Armouries','City-centre food'],'Stone':['Stone town centre','Canal-side pubs','Local shops']};
+const restrictionRules=[{match:'Oxford',open:'10:00',close:'14:00',note:'Matched restriction model: selected Oxford Canal lock flights may have limited operating hours.'},{match:'Macclesfield',open:'09:00',close:'13:00',note:'Matched restriction model: restricted lock-flight operating window.'},{match:'Grand Union',open:'09:00',close:'14:00',note:'Matched restriction model: selected restricted passages should be cleared before afternoon closure.'}];
+function parseLoc(v){const [name,lat,lon]=v.split('|');return{name,lat:Number(lat),lon:Number(lon)}}
+function toMin(t){const [h,m]=t.split(':').map(Number);return h*60+m}
+function fmtTime(n){n=Math.round(n);return String(Math.floor(n/60)%24).padStart(2,'0')+':'+String(n%60).padStart(2,'0')}
+function fmtDate(d){return d.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short',year:'numeric'})}
+function estimateMiles(a,b){return Math.max(5,(map.distance([a.lat,a.lon],[b.lat,b.lon])/1000)*0.621371*1.45)}
+function restrictionFor(a,b){const s=(a.name+' '+b.name).toLowerCase();if(s.includes('oxford'))return restrictionRules[0];if(s.includes('macclesfield'))return restrictionRules[1];if(s.includes('braunston')||s.includes('birmingham'))return restrictionRules[2];return null}
+function mooringName(end,i,last){if(last)return end.name;return ['Visitor mooring','Village / pub mooring','Serviced marina mooring','Quiet rural mooring','Town-centre mooring'][i%5]}
+function buildItinerary(){const mode=document.getElementById('boatMode').value,start=parseLoc(document.getElementById('baseMarina').value),end=parseLoc(document.getElementById('endMarina').value),days=Math.max(1,Math.min(28,Number(document.getElementById('days').value)||7)),dailyHours=Math.max(2,Math.min(12,Number(document.getElementById('hours').value)||6)),startTime=document.getElementById('dayStart').value||'09:00',dateStr=document.getElementById('startDate').value,startDate=dateStr?new Date(dateStr+'T12:00:00'):new Date(),style=document.getElementById('tripStyle').value;
+let distance=mode==='private'?estimateMiles(start,end):Math.max(18,dailyHours*days*1.7),lockHours=Math.max(1,distance/28),totalHours=distance/2+lockHours,restriction=restrictionFor(start,end),remaining=distance,itin=[];
+for(let i=0;i<days&&remaining>.1;i++){const date=new Date(startDate);date.setDate(startDate.getDate()+i);const depart=toMin(startTime);let available=dailyHours*60,note='';if(restriction){const close=toMin(restriction.close);if(depart>=close){available=0;note='No passage planned: restriction closes at '+restriction.close+'.';}else{available=Math.min(available,close-depart);if(available<dailyHours*60)note='Day shortened to clear restricted passage before '+restriction.close+'.';}}const hrs=available/60,miles=Math.min(remaining,Math.max(0,hrs*1.7));remaining-=miles;const stop=mooringName(end,i,remaining<=.1),ideas=(locationIdeas[stop]||locationIdeas[end.name]||['Explore nearby village/town','Waterside pub or café','Top up water / check services']).slice(0,3);itin.push({day:i+1,date:fmtDate(date),depart:fmtTime(depart),arrive:fmtTime(depart+available),hours:hrs,miles,stop,ideas,restriction:note});if(available===0)break;}
+currentItinerary={mode,start,end,startDate:fmtDate(startDate),distance,lockHours,totalHours,itinerary:itin,remaining,restriction,style};plannedCentre={lat:start.lat,lon:start.lon};
+if(routeOverlay)map.removeLayer(routeOverlay);routeOverlay=L.polyline([[start.lat,start.lon],[end.lat,end.lon]],{color:'#145d73',weight:5,dashArray:'10 7'}).addTo(map);map.fitBounds(routeOverlay.getBounds(),{padding:[35,35]});
+let html='<div class="card"><div class="route-summary"><div class="metric"><span class="meta">Indicative distance</span><b>'+distance.toFixed(0)+' mi</b></div><div class="metric"><span class="meta">Cruising + locks</span><b>~'+totalHours.toFixed(1)+' h</b></div><div class="metric"><span class="meta">Start</span><b style="font-size:14px">'+esc(start.name)+'</b></div><div class="metric"><span class="meta">Destination</span><b style="font-size:14px">'+esc(end.name)+'</b></div></div><div class="warn" style="margin-top:9px">Indicative until the exact routable CRT graph is connected. Restriction windows are applied to daily timings where matched.</div></div>';
+itin.forEach(d=>html+='<div class="itinerary-day"><div class="daytitle">Day '+d.day+' • '+esc(d.date)+'</div><div class="stop"><strong>'+esc(d.stop)+'</strong> • '+d.miles.toFixed(1)+' mi • '+d.hours.toFixed(1)+' h</div><div class="meta">'+d.depart+' → '+d.arrive+'</div>'+(d.restriction?'<div class="restriction-note">'+esc(d.restriction)+'</div>':'')+'<div class="ideas">Ideas: '+d.ideas.map(esc).join(' • ')+'</div></div>');
+html+=remaining>.1?'<div class="bad"><strong>Not achievable in selected days.</strong><br>About '+remaining.toFixed(0)+' miles remain.</div>':'<div class="ok"><strong>Indicative itinerary reaches the destination.</strong></div>';document.getElementById('routeResult').innerHTML=html;document.getElementById('printItineraryBtn').disabled=false;setTimeout(()=>loadPois(true),200);}
+document.getElementById('planBtn').onclick=buildItinerary;
+document.getElementById('boatMode').onchange=()=>{const hire=document.getElementById('boatMode').value==='hire';document.getElementById('endField').style.opacity=hire?.65:1;document.getElementById('tripStyleField').style.display=hire?'':'none';};document.getElementById('boatMode').dispatchEvent(new Event('change'));
+document.getElementById('printItineraryBtn').onclick=()=>{if(!currentItinerary)return;const it=currentItinerary;let body='<h1>UK Canal Navigator — Proposed Itinerary</h1><p><strong>'+esc(it.start.name)+' → '+esc(it.end.name)+'</strong></p><p>Start: '+esc(it.startDate)+' | Distance: '+it.distance.toFixed(0)+' miles | Cruising/locks: ~'+it.totalHours.toFixed(1)+' hours</p>';if(it.restriction)body+='<p><strong>Restriction considered:</strong> '+esc(it.restriction.note)+' '+it.restriction.open+'–'+it.restriction.close+'.</p>';it.itinerary.forEach(d=>body+='<hr><h2>Day '+d.day+' — '+esc(d.date)+'</h2><p><strong>'+esc(d.stop)+'</strong><br>'+d.miles.toFixed(1)+' miles • '+d.hours.toFixed(1)+' hours • '+d.depart+'–'+d.arrive+'</p>'+(d.restriction?'<p><strong>Restriction:</strong> '+esc(d.restriction)+'</p>':'')+'<p>Ideas: '+d.ideas.map(esc).join(' • ')+'</p>');const sheet=document.getElementById('printSheet');sheet.innerHTML=body+'<p style="margin-top:30px;font-size:11px;color:#666">Verify current CRT notices, signage and local conditions before navigation.</p>';sheet.style.display='block';window.print();setTimeout(()=>sheet.style.display='none',500);};
 document.getElementById('routeTradesBtn').onclick=()=>{showPanel('trades');if(plannedCentre)map.setView([plannedCentre.lat,plannedCentre.lon],12);setTimeout(searchTrades,500)};
-
 function tradeQuery(){
  const c=plannedCentre||map.getCenter(),r=12000,a='(around:'+r+','+c.lat.toFixed(6)+','+c.lng.toFixed(6)+')';
  const selected=[...document.querySelectorAll('.tradeToggle:checked')].map(x=>x.value),q=[];
@@ -647,5 +663,5 @@ async function searchTrades(){
 document.getElementById('tradeSearchBtn').onclick=searchTrades;
 
 </script>
-</body>
+<div id="printSheet" style="display:none"></div></body>
 </html>
